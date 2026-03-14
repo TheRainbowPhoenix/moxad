@@ -1,0 +1,198 @@
+html { font-size:13px }
+
+body {	
+	background-color: rgb(255, 255, 255);
+	font-family: Arial,Helvetica,sans-serif,Marlett;		
+}
+
+h1 {
+    /* title  1:page name.*/
+    
+    background-image: url(image/title_img.jpg);
+	background-repeat: no-repeat;
+	font-size: 1.5em;	
+	color: rgb(0, 154, 130);
+	margin-top: 0.5em;	
+	margin-left: 4px;
+	text-indent: 22px;
+	text-align: left;
+}
+
+h2 {
+    /* title  2:arear name.*/   
+	font-size: 1em;	
+	font-weight: bold;
+	color: rgb(0, 154, 130);
+	text-align: left;
+}
+
+
+
+fieldset { 
+	/* real content */
+	background-color: rgb(255, 255, 255);
+	position: relative;	
+	border-style: none; /* Not show border */
+	font-size: 1em;
+	margin-top: 0.5em;
+	margin-left: 24px;
+	width:700px;
+}
+
+th {
+	font-family: Arial, Helvetica, sans-serif, Marlett;
+	background-color: rgb(0, 124, 100);
+	color: rgb(255, 255, 255);
+	font-size: 13px;
+	text-align: left; 
+	text-indent: 8px;
+}
+
+th.s0 {
+	text-align: center; 
+	text-indent: 0px;	
+}
+
+th.inner {
+	background-color:RGB(204,204,204); 
+	color:#414042; 
+	font-size:9pt
+}
+
+tr {
+	line-height: 1.5rem;
+}
+
+tr.even td {
+	line-height: 1.5rem;
+	background-color: #FFFFFF;
+}
+
+tr.odd td {
+	line-height: 1.5rem;
+	background-color: #DDDDDD;
+}
+
+tr.r0 td{background-color:#FFFFFF; color:RGB(0, 124,100); font-weight:bold; font-size:11pt}
+
+td {
+	font-family: Arial, Helvetica, sans-serif, Marlett;
+	background-color: rgb(255, 255, 255);
+	color: #000000; /* text word */
+	font-size:13px;
+	text-align: left;
+}
+
+input.buttonLong {
+    font-family: "Swiss 721 BT";
+    font-size: 13px;
+    font-weight: bold;
+    color: rgb(255, 255, 255);   
+    background-color: rgb(0, 124, 100);
+    width:100px; 
+    height:25px; 
+    background-image:url(image/bnlong.png); 
+    background-repeat:no-repeat;
+    border-style:none; 
+    cursor:pointer    
+}
+
+input.button {
+    font-family: "Swiss 721 BT";
+    font-size: 13px;
+    font-weight: bold;
+    color: rgb(255, 255, 255);   
+    background-color: rgb(0, 124, 100);
+    width:79px; 
+    height:25px; 
+    background-image:url(image/bn0.png); 
+    background-repeat:no-repeat;
+    border-style:none; 
+    cursor:pointer    
+}
+
+input.button2 {
+    font-family: "Swiss 721 BT";
+    font-size: 13px;
+    font-weight: bold;
+    color: rgb(255, 255, 255);   
+    background-color: rgb(0, 124, 100);
+    width:130px; 
+    height:25px; 
+    background-image:url(image/bnlong.png); 
+    background-repeat:no-repeat;
+    border-style:none; 
+    cursor:pointer    
+}
+
+
+input.buttonInTable {
+    font-family: "Swiss 721 BT";
+    font-size: 0.75em;
+    font-weight: bold;
+    text-align: center;
+    color: rgb(0, 0, 0);   
+    background-color: rgb(255, 255, 255);
+    width:41px; 
+    height:25px; 
+    background-image:url("bn1.png"); 
+    background-repeat:no-repeat;
+    background-position:center;
+    border-style:none; 
+    cursor:pointer    
+}
+
+input	{
+	font-family:Arial, Helvetica, sans-serif, Marlett; 
+	font-size:13px
+}
+
+textarea{
+	font-family:Arial, Helvetica, sans-serif, Marlett; 
+	font-size:13px
+}
+
+input.b0	{font-family:"Swiss 721 BT"; font-size:8pt; font-weight:bold; color:#775555; width:42px; height:21px; background-image:url(image/bn1.png); background-repeat:no-repeat; border-style:none; cursor:pointer}
+tr.rh	td{background-color:RGB(76, 179,231); color:#000000;}
+tr.r7	td{background-color:#DDDDDD; font-size:9pt}
+
+select {
+	font-family:Arial,Helvetica,sans-serif,Marlett;	
+	font-size: 13px;
+}
+
+div.scroll{
+	height:300px;
+	width:700px;
+
+	overflow: auto;
+}
+
+table{
+	padding:0px;
+	border:0px;
+    margin:0px;
+}
+
+table.intable{
+	padding:0px;
+	border:0px;
+    margin:0px;
+    border-spacing: 0px; 
+}
+
+
+
+table.withInput td {
+	padding:0px;
+	border:1px;
+    margin:0px;
+    border-style:groove;
+}
+
+table.notWithInput td {
+	padding:0px;
+	border:0px;
+    margin:0px;
+}
+
