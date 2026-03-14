@@ -1,20 +1,23 @@
 export MOXA_RAMDISK=/tmp/moxa_final_test
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REIMP_DIR="$(dirname "$DIR")"
 
 echo "=== 1. DES encrypt/decrypt ==="
-python3 /mnt/user-data/outputs/moxa_cli.py --encrypt moxa
+python3 $REIMP_DIR/moxa_cli.py --encrypt moxa
 echo ""
-python3 /mnt/user-data/outputs/moxa_cli.py --encrypt "Adm1n@moxa"
+python3 $REIMP_DIR/moxa_cli.py --encrypt "Adm1n@moxa"
 echo ""
-python3 /mnt/user-data/outputs/moxa_cli.py --decrypt "$(python3 /mnt/user-data/outputs/moxa_cli.py --encrypt moxa | grep encrypted | awk '{print $3}')"
+python3 $REIMP_DIR/moxa_cli.py --decrypt "$(python3 $REIMP_DIR/moxa_cli.py --encrypt moxa | grep encrypted | awk '{print $3}')"
 
 echo ""
 echo "=== 2. Round-trip: decrypt(encrypt(pw)) == pw ==="
-python3 << 'PY'
+python3 << PY
 import sys, os
 os.environ["MOXA_RAMDISK"] = "/tmp/moxa_final_test"
-sys.path.insert(0, "/mnt/user-data/outputs")
+reimp_dir = "${REIMP_DIR}"
+sys.path.insert(0, reimp_dir)
 import importlib.util
-spec = importlib.util.spec_from_file_location("mc", "/mnt/user-data/outputs/moxa_cli.py")
+spec = importlib.util.spec_from_file_location("mc", os.path.join(reimp_dir, "moxa_cli.py"))
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 
 ok = fail = 0
@@ -38,15 +41,15 @@ PY
 
 echo ""
 echo "=== 3. Export with EDR-810 model ==="
-python3 /mnt/user-data/outputs/moxa_cli.py --export 2>/dev/null | head -20
+python3 $REIMP_DIR/moxa_cli.py --export 2>/dev/null | head -20
 
 echo ""
 echo "=== 4. Banner shows EDR-810 ==="
-printf '?\nquit\n' | python3 /mnt/user-data/outputs/moxa_cli.py 2>/dev/null | head -8
+printf '?\nquit\n' | python3 $REIMP_DIR/moxa_cli.py 2>/dev/null | head -8
 
 echo ""
 echo "=== 5. moxa_shm.py standalone ==="
-MOXA_RAMDISK=/tmp/moxa_final_test python3 /mnt/user-data/outputs/moxa_shm.py dump | python3 -c "
+MOXA_RAMDISK=/tmp/moxa_final_test python3 $REIMP_DIR/moxa_shm.py dump | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
 print('  hostname:', d['system']['hostname'])
@@ -56,5 +59,5 @@ print('  ShmRegion mmap file exists:', __import__('pathlib').Path('/tmp/moxa_fin
 
 echo ""
 echo "=== 6. show commands ==="
-python3 /mnt/user-data/outputs/moxa_cli.py --show version 2>/dev/null
-python3 /mnt/user-data/outputs/moxa_cli.py --show users  2>/dev/null
+python3 $REIMP_DIR/moxa_cli.py --show version 2>/dev/null
+python3 $REIMP_DIR/moxa_cli.py --show users  2>/dev/null
