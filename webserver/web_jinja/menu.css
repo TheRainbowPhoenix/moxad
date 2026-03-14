@@ -1,0 +1,12 @@
+A:link				{text-decoration:none}
+A, A:visited		{text-decoration:none; color:#336699}
+A:hover, A:active	{text-decoration:none; color:#FFFF00}
+body.Menu	{margin:0 0 0 10; background-color:#E0FFFF; font-family:arial}
+//table.MenuH	{background-color:#E1E1FF; width:100%}
+//table.MenuL	{background-color:#E1E1FF; width:100%; border-style:solid; border-width:1; border-color:#FFFFFF}
+table.MenuH	{background-color:#848484; width:100%}
+table.MenuL	{background-color:#B3D5FF; width:100%; border-style:solid; border-width:1; border-color:#FFFFFF}
+tr.MenuH	{color:#FFFFFF; background-color:#336699}
+tr.MenuL	{}
+td.MenuH	{padding:4 10; font-weight:bold; text-align:center; cursor:hand; white-space:nowrap}
+td.MenuL	{border-style:solid; border-width:1; border-color:#A0C0FF}

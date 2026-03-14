@@ -1,0 +1,54 @@
+A:link			{text-decoration:none}
+A, A:visited	{text-decoration:none; color:#666666}
+A:active, A:hover	{text-decoration:none; color:#000000}
+table		{width:100%; font-size:1; font-family:Arial, Helvetica, sans-serif, Marlett; background-color:#FFFFFF;padding:0px; border:0px; margin:0px;}
+table.t0	{background-color:#FFFFFF;padding:0px; border:0px; margin:0px;}
+table.t1	{background-color:#FFFFFF; width:auto; padding:0px; border:0px; margin:0px;}
+table.t2	{border:solid 10 #FFFFFF; padding:0px; border:0px; margin-left: 24px;}
+table.tf    {width:auto; border:0px; padding:0px; border:0px; margin:0px;}
+body        {font-family:Arial, Helvetica, sans-serif, Marlett; padding:0px; border:0px; margin:0px;}
+body.main   {font-size:1; background-color:#FFFFFF; padding:0px; border:0px; margin:0px;}
+body.help   {font-size:16px; background-color:#FFFFFF; padding:0px; border:0px; margin:0px;}
+.big, h2    {
+	list-style-type:none;
+	margin-left:0px;
+	text-indent: 22px;
+	background-image:url(image/title_img.jpg); 
+	background-repeat:no-repeat; 
+	text-align: left;
+	font-family: "Swiss 721 BT"; 
+	font-size: 18pt; 
+	color: rgb(0, 154,130);
+	font-weight: bold;
+	height:30px;
+	line-height: 30px;
+}
+select,td   {font-family:Arial, Helvetica, sans-serif, Marlett}
+input			{font-family:Arial, Helvetica, sans-serif, Marlett; font-size:9pt}
+input.button           {font-family:"Swiss 721 BT"; font-size:9pt; font-weight:bold; background-color:RGB(0,124,100); color:RGB(255, 255,255); width:79px; height:25px; clip:rect( ); background-image:url(image/bn0.png); background-repeat:no-repeat;border-style:none; cursor:pointer }
+input.button2           {font-family:"Swiss 721 BT"; font-size:9pt; font-weight:bold; background-color:RGB(0,124,100); color:RGB(255, 255,255); width:130px; height:25px; clip:rect( ); background-image:url(image/bnlong.png); background-repeat:no-repeat;border-style:none; cursor:pointer }
+input.b0               {font-family:"Swiss 721 BT"; font-size:8pt; font-weight:bold; color:#775555; width:42px; height:21px; background-image:url(image/bn1.png); background-repeat:no-repeat; border-style:none; cursor:pointer}
+
+.r0	{background-color:#FFFFFF; color:RGB(0, 124,100); font-weight:bold; font-size:11pt}
+.r1	{background-color:#FFFFFF; font-size:9pt}
+.r2	{background-color:#FFFFFF; font-size:9pt}
+.r3	{background-color:#FFFFFF; font-size:9pt}
+.r4	{background-color:#FFFFFF; font-size:9pt}
+.r5	{background-color:RGB(0, 124,100); color:#FFFFFF; font-size:9pt}
+.r6	{background-color:#EEEEEE; font-size:9pt}
+.r7	{background-color:#DDDDDD; font-size:9pt}
+.r8	{background-color:RGB(204,204,204); color:#414042; font-size:9pt}
+.rh	{background-color:RGB(76, 179,231); color:#000000; font-size:9pt}
+td.ar	{text-align:right; padding-right:1em}
+p.hd	{font-family:Arial, Helvetica, sans-serif, Marlett; color:#007C60; font-weight:bold; font-size:16pt; text-align:center; margin:1em 0}
+p.L0	{font-family:Arial, Helvetica, sans-serif, Marlett; color:#000080; font-weight:bold}
+p.p0	{font-family:Arial, Helvetica, sans-serif, Marlett; margin:0 0 0 2em}
+p.L1	{font-family:Arial, Helvetica, sans-serif, Marlett; margin:0 0 0 2em; color:#0000B0; font-weight:bold}
+p.p1	{font-family:Arial, Helvetica, sans-serif, Marlett; margin:0 0 0 4em}
+p.p2	{font-family:Arial, Helvetica, sans-serif, Marlett; margin:5 0 5 4em; text-indent: 2em}
+p.tl	{font-family:Arial, Helvetica, sans-serif, Marlett; color:#007C60; font-weight:bold; text-align:right}
+ul		{font-family:Arial, Helvetica, sans-serif, Marlett; margin:0 0 0 4em}
+strong	{color:#0000FF; white-space:nowrap}
+hr		{color:#93C4FF}
+.tag1	{background-color: #FFFFFF; color: #666666; font-weight: bold; white-space:nowrap}
+.tag0	{background-color: #FFFFFF; color: #000000; font-weight: bold; white-space:nowrap}
