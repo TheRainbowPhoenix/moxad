@@ -1,5 +1,5 @@
 """
-ssc.py  :  Switch System Control layer  (Ssc_* functions)
+ssc.py  —  Switch System Control layer  (Ssc_* functions)
 
 Maps to the Ssc_* functions in tr2d binary.  All hardware I/O goes through
 here.  Replace the ioctl calls with your driver / simulation backend.
@@ -35,9 +35,9 @@ else:
 
 log = logging.getLogger("tr2d.ssc")
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # ioctl codes seen in the binary
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 ETHSW_GET        = 0x82044702
 ETHSW_SET        = 0x42044703
 ETHSW_FDB_GET    = 0x82044704
@@ -89,17 +89,17 @@ class SwCmd:
     QOS_DSCP_MAP     = 5
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Abstract backend
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class SwitchBackend(ABC):
     """Every Ssc_ function delegates hardware work to one of these."""
 
-    #  port state 
+    # ── port state ────────────────────────────────────────────────────────────
     @abstractmethod
     def set_port_state(self, port: int, state: int) -> int:
-        """Ssc_setPortState  (0x17AC8) : DISABLE/BLOCKED/LEARNING/FORWARDING"""
+        """Ssc_setPortState  (0x17AC8) — DISABLE/BLOCKED/LEARNING/FORWARDING"""
     @abstractmethod
     def get_port_state(self, port: int) -> int:
         """Ssc_getPortState  (sub_179CC)"""
@@ -110,16 +110,16 @@ class SwitchBackend(ABC):
     def set_port_enable(self, port: int, enable: bool) -> int:
         """Ssc_port_enable_set  (sub_17C5C)"""
 
-    #  packet I/O 
+    # ── packet I/O ────────────────────────────────────────────────────────────
     @abstractmethod
     def send_frame(self, tx_fd=None, raw_fd=None, port: int = 0,
                    frame: bytes = b"", vid: int = 0) -> int:
-        """frame_send  (sub_1B970) : write frame to raw socket"""
+        """frame_send  (sub_1B970) — write frame to raw socket"""
     @abstractmethod
     def recv_frame(self, fd=None) -> Tuple[Optional[bytes], int]:
-        """recvfrom on raw ring socket -> (frame, src_port)"""
+        """recvfrom on raw ring socket → (frame, src_port)"""
 
-    #  MAC / FDB 
+    # ── MAC / FDB ─────────────────────────────────────────────────────────────
     @abstractmethod
     def fdb_flush(self, pbmp: int) -> int:
         """Ssc_flushMacAddr  (sub_1816C)"""
@@ -130,22 +130,22 @@ class SwitchBackend(ABC):
     def fdb_find(self, mac: bytes) -> Optional[dict]:
         """Ssc_fdbFindMacEntry  (0x1852C)"""
 
-    #  LED / fault 
+    # ── LED / fault ───────────────────────────────────────────────────────────
     @abstractmethod
     def set_fault_led(self, val: int): ...
     @abstractmethod
     def clear_fault_led(self, val: int): ...
 
-    #  learning 
+    # ── learning ──────────────────────────────────────────────────────────────
     @abstractmethod
     def port_learning_disable(self, port: int) -> int: ...
     @abstractmethod
     def port_learning_enable(self, port: int) -> int: ...
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Linux raw-socket backend  (what the real tr2d uses)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class LinuxSwitchBackend(SwitchBackend):
     """
@@ -159,10 +159,10 @@ class LinuxSwitchBackend(SwitchBackend):
         self._sw_fd: Optional[int] = None
         self._raw_sock: Optional[socket.socket] = None
 
-    #  internal helpers 
+    # ── internal helpers ──────────────────────────────────────────────────────
 
     def _open_sw(self) -> int:
-        """sub_16534  : open switch control fd (Linux only)"""
+        """sub_16534  — open switch control fd (Linux only)"""
         if IS_WINDOWS:
             return -1
         if self._sw_fd is None or self._sw_fd < 0:
@@ -183,12 +183,12 @@ class LinuxSwitchBackend(SwitchBackend):
             return data
 
     def _open_raw(self) -> Optional[socket.socket]:
-        """tr2_initTx  : AF_PACKET SOCK_RAW (Linux only)"""
+        """tr2_initTx  — AF_PACKET SOCK_RAW (Linux only)"""
         if self._raw_sock is None and not IS_WINDOWS:
             self._raw_sock = open_raw_socket(self.iface)
         return self._raw_sock
 
-    #  port state 
+    # ── port state ────────────────────────────────────────────────────────────
 
     def set_port_state(self, port: int, state: int) -> int:
         log.debug(f"Ssc_setPortState port={port} state={state}")
@@ -207,7 +207,7 @@ class LinuxSwitchBackend(SwitchBackend):
         struct.pack_into("<I", buf, 4, port)
         result = self._ioctl(ETHSW_GET, buf)
         state = struct.unpack_from("<I", result, 8)[0]
-        log.debug(f"Ssc_getPortState port={port} -> {state}")
+        log.debug(f"Ssc_getPortState port={port} → {state}")
         return state
 
     def get_port_link(self, port: int) -> bool:
@@ -216,7 +216,7 @@ class LinuxSwitchBackend(SwitchBackend):
         struct.pack_into("<I", buf, 4, port)
         result = self._ioctl(ETHSW_STATS, buf)
         link = bool(struct.unpack_from("<I", result, 8)[0])
-        log.debug(f"Ssc_getPortLinkState port={port} -> {link}")
+        log.debug(f"Ssc_getPortLinkState port={port} → {link}")
         return link
 
     def set_port_enable(self, port: int, enable: bool) -> int:
@@ -228,7 +228,7 @@ class LinuxSwitchBackend(SwitchBackend):
         self._ioctl(ETHSW_SET, buf)
         return 0
 
-    #  packet I/O 
+    # ── packet I/O ────────────────────────────────────────────────────────────
 
     def send_frame(self, tx_fd=None, raw_fd=None, port: int = 0,
                    frame: bytes = b"", vid: int = 0) -> int:
@@ -255,7 +255,7 @@ class LinuxSwitchBackend(SwitchBackend):
             log.error(f"recv_frame error: {e}")
             return None, 0
 
-    #  MAC / FDB 
+    # ── MAC / FDB ─────────────────────────────────────────────────────────────
 
     def fdb_flush(self, pbmp: int) -> int:
         log.debug(f"Ssc_flushMacAddr pbmp=0x{pbmp:x}")
@@ -268,7 +268,7 @@ class LinuxSwitchBackend(SwitchBackend):
     def fdb_find(self, mac: bytes) -> Optional[dict]:
         return None
 
-    #  LED 
+    # ── LED ──────────────────────────────────────────────────────────────────
 
     def set_fault_led(self, val: int):
         log.debug(f"Ssc_setFaultLed {val}")
@@ -276,7 +276,7 @@ class LinuxSwitchBackend(SwitchBackend):
     def clear_fault_led(self, val: int):
         log.debug(f"Ssc_clearFaultLed {val}")
 
-    #  learning 
+    # ── learning ──────────────────────────────────────────────────────────────
 
     def port_learning_disable(self, port: int) -> int:
         log.debug(f"Ssc_port_learing_disable port={port}")
@@ -287,9 +287,9 @@ class LinuxSwitchBackend(SwitchBackend):
         return 0
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Software simulation backend  (no hardware needed)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class SimSwitchBackend(SwitchBackend):
     """
@@ -302,21 +302,21 @@ class SimSwitchBackend(SwitchBackend):
         self._port_state = [PortState.FORWARDING] * port_count
         self._port_link  = [True]  * port_count
         self._port_learn = [True]  * port_count
-        self._fdb: dict  = {}          # mac_hex -> {"port": int, "vid": int}
+        self._fdb: dict  = {}          # mac_hex → {"port": int, "vid": int}
         self._fault_led  = 0
-        # socket pairs per port: (tx_end, rx_end) : cross-platform
+        # socket pairs per port: (tx_end, rx_end) — cross-platform
         self._port_socks: List[Tuple[socket.socket, socket.socket]] = []
         for _ in range(port_count):
             a, b = make_wakeup_pair()
             self._port_socks.append((a, b))
-        # inbound queue per ring (port -> list[bytes])
+        # inbound queue per ring (port → list[bytes])
         self._rx_queue: List[List[bytes]] = [[] for _ in range(port_count)]
 
     def inject_frame(self, port: int, frame: bytes):
-        """Test helper : inject a frame as if it arrived on port."""
+        """Test helper — inject a frame as if it arrived on port."""
         self._rx_queue[port].append(frame)
 
-    #  port state 
+    # ── port state ────────────────────────────────────────────────────────────
 
     def set_port_state(self, port: int, state: int) -> int:
         log.info(f"[SIM] Ssc_setPortState port={port} "
@@ -338,7 +338,7 @@ class SimSwitchBackend(SwitchBackend):
                                       else PortState.DISABLE)
         return 0
 
-    #  packet I/O 
+    # ── packet I/O ────────────────────────────────────────────────────────────
 
     def send_frame(self, tx_fd=None, raw_fd=None, port: int = 0,
                    frame: bytes = b"", vid: int = 0) -> int:
@@ -354,7 +354,7 @@ class SimSwitchBackend(SwitchBackend):
                     return frame, port
         return None, 0
 
-    #  MAC / FDB 
+    # ── MAC / FDB ─────────────────────────────────────────────────────────────
 
     def fdb_flush(self, pbmp: int) -> int:
         removed = [m for m, e in self._fdb.items()
@@ -371,7 +371,7 @@ class SimSwitchBackend(SwitchBackend):
     def fdb_find(self, mac: bytes) -> Optional[dict]:
         return self._fdb.get(mac.hex())
 
-    #  LED 
+    # ── LED ──────────────────────────────────────────────────────────────────
 
     def set_fault_led(self, val: int):
         log.warning(f"[SIM] *** FAULT LED ON ({val}) ***")
@@ -381,7 +381,7 @@ class SimSwitchBackend(SwitchBackend):
         log.info(f"[SIM] fault LED cleared ({val})")
         self._fault_led = 0
 
-    #  learning 
+    # ── learning ──────────────────────────────────────────────────────────────
 
     def port_learning_disable(self, port: int) -> int:
         self._port_learn[port] = False
@@ -392,9 +392,9 @@ class SimSwitchBackend(SwitchBackend):
         return 0
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Ssc facade  (thin wrappers matching binary function names exactly)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 from tr2d_structs import PORT_STATE_STR   # re-import for use below
 
@@ -409,13 +409,13 @@ class Ssc:
                  tx_fd:           int   = -1,
                  ring_bridge_ids: list  = None):
         self.sw  = backend
-        self.mac = mac_addr          # byte_27314 : our own MAC
+        self.mac = mac_addr          # byte_27314 — our own MAC
         self.tx_fd = tx_fd           # dword_2AA8C (AF_PACKET raw socket)
-        # dword_2AD30 / dword_2AD34 : per-ring destination bridge MACs
+        # dword_2AD30 / dword_2AD34 — per-ring destination bridge MACs
         # set by tr2_initRing; default to own MAC until configured
         self.ring_bridge_ids: list = ring_bridge_ids or [bytes(6), bytes(6)]
 
-    #  port state 
+    # ── port state ────────────────────────────────────────────────────────────
 
     def Ssc_setPortState(self, port: int, state: int, instance: int = 0) -> int:
         log.debug(f"Ssc_setPortState port={port} state={PORT_STATE_STR.get(state, state)!r}")
@@ -423,7 +423,7 @@ class Ssc:
 
     def Ssc_getPortState(self, port: int) -> int:
         s = self.sw.get_port_state(port)
-        log.debug(f"Ssc_getPortState port={port} -> {PORT_STATE_STR.get(s, s)!r}")
+        log.debug(f"Ssc_getPortState port={port} → {PORT_STATE_STR.get(s, s)!r}")
         return s
 
     def Ssc_getPortLinkState(self, port: int) -> bool:
@@ -439,10 +439,10 @@ class Ssc:
         return self.sw.port_learning_enable(port)
 
     def Ssc_isGigaCopperLink(self, port: int) -> bool:
-        """sub_16A0C : checks giga-copper bitmap"""
+        """sub_16A0C — checks giga-copper bitmap"""
         return False  # simulator default
 
-    #  LED 
+    # ── LED ──────────────────────────────────────────────────────────────────
 
     def Ssc_setFaultLed(self, val: int):
         self.sw.set_fault_led(val)
@@ -450,7 +450,7 @@ class Ssc:
     def Ssc_clearFaultLed(self, val: int):
         self.sw.clear_fault_led(val)
 
-    #  FDB 
+    # ── FDB ──────────────────────────────────────────────────────────────────
 
     def Ssc_flushMacAddr(self, pbmp: int) -> int:
         log.debug(f"Ssc_flushMacAddr pbmp=0x{pbmp:x}")
@@ -463,7 +463,7 @@ class Ssc:
     def Ssc_fdbFindMacEntry(self, mac: bytes) -> Optional[dict]:
         return self.sw.fdb_find(mac)
 
-    #  packet send 
+    # ── packet send ──────────────────────────────────────────────────────────
 
     def Ssc_sendTR2Packet(self, tx_fd: int, raw_fd: int, ring_id: int,
                           port: int, payload: bytes, vid: int = 0,
@@ -493,15 +493,15 @@ class Ssc:
 
     def Ssc_sendPacket(self, tx_fd: int, raw_fd: int, port: int,
                        da: bytes, payload: bytes, vid: int = 0) -> int:
-        """Ssc_sendPacket @ 0x1BB50 : generic frame send"""
+        """Ssc_sendPacket @ 0x1BB50 — generic frame send"""
         frame = build_tr2_frame(da, self.mac, port, 0, payload, vid)
         return self.sw.send_frame(tx_fd, raw_fd, port, frame, vid)
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Sstap helpers  (Sstap_transmitCouplerTCNego / Sstap_transmitLinkupConfirm)
 # These build specific packet types and call Ssc_sendTR2Packet
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def Sstap_transmitCouplerTCNego(ssc: 'Ssc', tx_fd: int, raw_fd: int,
                                  port: int, ring_id: int):

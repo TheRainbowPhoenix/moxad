@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TurboRing2 Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body class="bg-gray-900 h-screen flex flex-col overflow-hidden text-gray-200 font-sans">
+
+    <!-- Top Navigation Controls -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex gap-4 items-center shadow-lg z-10 shrink-0">
+        <h1 class="text-xl font-bold text-white flex-1 flex items-center gap-2 tracking-tight">
+            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            TurboRing Simulator
+        </h1>
+        <button onclick="socket.emit('init_ring', {nodes: 3})" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg font-medium shadow-md transition transform active:scale-95">3-Node Ring</button>
+        <button onclick="socket.emit('init_ring', {nodes: 5})" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg font-medium shadow-md transition transform active:scale-95">5-Node Ring</button>
+        <button onclick="socket.emit('init_ring', {nodes: 0})" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-lg font-medium shadow-md transition transform active:scale-95">Stop All</button>
+        <button onclick="toggleLogs()" id="logToggleBtn" class="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white px-4 py-2 rounded-lg font-medium shadow-md transition ml-4">
+            Show Logs
+        </button>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        <!-- Graph Area (D3 Target) -->
+        <div class="flex-1 relative bg-gray-900 min-h-0" id="graph-container">
+            <svg id="network" class="w-full h-full absolute inset-0"></svg>
+            <div class="absolute top-4 left-4 text-xs text-gray-400 font-mono select-none pointer-events-none">
+                <span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-1 align-middle"></span> Forwarding <br>
+                <span class="inline-block w-3 h-3 rounded-full bg-amber-500 mr-1 align-middle mt-1"></span> Blocked <br>
+                <span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-1 align-middle mt-1"></span> Down / Disabled
+            </div>
+        </div>
+
+        <!-- Real-time Console Log (Collapsible) -->
+        <div id="logsPanel" class="hidden h-[35%] bg-gray-950 border-t border-gray-800 flex flex-col shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.5)] z-20 absolute bottom-0 w-full transition-transform">
+            <div class="px-4 py-2 border-b border-gray-800 flex justify-between items-center bg-gray-900 shadow-sm shrink-0">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Live Packet Tracer & Daemon Output
+                </h2>
+                <div class="flex gap-4">
+                    <button onclick="clearLogs()" class="text-xs text-gray-400 hover:text-white transition">Clear Stream</button>
+                    <button onclick="toggleLogs()" class="text-xs text-gray-400 hover:text-white transition font-bold">&times; Close</button>
+                </div>
+            </div>
+            <div id="logs" class="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-1">
+                <!-- Logs are streamed here via WebSockets -->
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- WebSocket Setup ---
+        const socket = io();
+        let isLogsOpen = false;
+        
+        // --- D3 Graph Setup ---
+        const svg = d3.select('#network');
+        const linkGroup = svg.append('g').attr('class', 'links');
+        const nodeGroup = svg.append('g').attr('class', 'nodes');
+        
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => socket.emit('connect'), 100); 
+        });
+
+        // Event Listeners
+        socket.on('topology_update', data => renderD3(data));
+        socket.on('log_entry', log => appendPacketLog(log));
+        socket.on('raw_log', log => appendRawLog(log));
+
+        function toggleLogs() {
+            isLogsOpen = !isLogsOpen;
+            const panel = document.getElementById('logsPanel');
+            const btn = document.getElementById('logToggleBtn');
+            
+            if (isLogsOpen) {
+                panel.classList.remove('hidden');
+                btn.textContent = 'Hide Logs';
+                btn.classList.add('bg-blue-600');
+                btn.classList.remove('bg-gray-700');
+                socket.emit('subscribe_logs'); 
+            } else {
+                panel.classList.add('hidden');
+                btn.textContent = 'Show Logs';
+                btn.classList.remove('bg-blue-600');
+                btn.classList.add('bg-gray-700');
+                socket.emit('unsubscribe_logs'); 
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        function getPortColor(port) {
+            if (!port) return '#374151';
+            // Force red representation if physically unlinked
+            if (port.is_down) return '#ef4444'; 
+            if (port.state === 'Forwarding') return '#10b981';
+            if (port.state === 'Blocked') return '#f59e0b';
+            return '#ef4444'; 
+        }
+
+        // --- D3 Rendering Engine ---
+        function renderD3(data) {
+            const container = document.getElementById('graph-container');
+            const cx = container.clientWidth / 2;
+            const cy = container.clientHeight / 2;
+            const r = Math.min(cx, cy) - 100;
+
+            const nodes = data.nodes || [];
+            const links = data.links || [];
+
+            nodes.forEach((n, i) => {
+                const angle = (i * 2 * Math.PI) / nodes.length - Math.PI / 2;
+                n.x = cx + r * Math.cos(angle);
+                n.y = cy + r * Math.sin(angle);
+            });
+
+            linkGroup.selectAll("g.link-wrapper")
+                .data(links, d => d.id)
+                .join(
+                    enter => {
+                        const g = enter.append("g").attr("class", "link-wrapper");
+                        g.append("line").attr("class", "link-line transition-all duration-150");
+
+                        const fo = g.append("foreignObject")
+                         .attr("width", 48).attr("height", 24).attr("class", "overflow-visible");
+                         
+                        fo.append("xhtml:div")
+                         .attr("class", "w-full h-full flex items-center justify-center")
+                         .html(d => `
+                            <button onclick="socket.emit('toggle_link', {id: '${d.id}'})" class="rounded-full w-10 h-5 border border-gray-700 shadow-lg p-0.5 outline-none cursor-pointer toggle-btn transition-colors duration-150">
+                                <div class="w-4 h-4 bg-white rounded-full shadow toggle-knob transition-transform duration-150"></div>
+                            </button>
+                         `);
+                        return g;
+                    },
+                    update => update,
+                    exit => exit.remove()
+                )
+                .each(function(d) {
+                    const n1 = nodes.find(n => n.id === d.n1);
+                    const n2 = nodes.find(n => n.id === d.n2);
+                    if(!n1 || !n2) return;
+                    
+                    const g = d3.select(this);
+                    
+                    g.select(".link-line")
+                        .attr("x1", n1.x).attr("y1", n1.y)
+                        .attr("x2", n2.x).attr("y2", n2.y)
+                        .attr("stroke", d.broken ? "#ef4444" : "#10b981")
+                        .attr("stroke-width", d.broken ? 2 : 4)
+                        .attr("stroke-dasharray", d.broken ? "8,8" : "none");
+
+                    const mx = (n1.x + n2.x) / 2;
+                    const my = (n1.y + n2.y) / 2;
+                    
+                    g.select("foreignObject").attr("x", mx - 24).attr("y", my - 12);
+                    g.select(".toggle-btn").attr("class", `rounded-full w-10 h-5 border border-gray-700 shadow-lg p-0.5 outline-none cursor-pointer toggle-btn transition-colors duration-150 ${d.broken ? 'bg-red-600' : 'bg-emerald-500'}`);
+                    g.select(".toggle-knob").attr("class", `w-4 h-4 bg-white rounded-full shadow toggle-knob transition-transform duration-150 ${d.broken ? '' : 'translate-x-5'}`);
+                });
+
+            nodeGroup.selectAll("g.node")
+                .data(nodes, d => d.id)
+                .join(
+                    enter => {
+                        const g = enter.append("g")
+                            .attr("class", "node")
+                            .attr("transform", d => `translate(${d.x - 60}, ${d.y - 35})`);
+
+                        g.append("rect")
+                            .attr("width", 120).attr("height", 70).attr("rx", 8)
+                            .attr("class", "node-bg transition-colors duration-300")
+                            .attr("fill", "#1f2937");
+
+                        // Master Crown 👑
+                        g.append("text").attr("class", "node-crown text-2xl pointer-events-none transition-opacity duration-300")
+                            .attr("x", 60).attr("y", -10).attr("text-anchor", "middle").text("👑");
+
+                        g.append("text").attr("class", "node-title text-sm font-bold pointer-events-none")
+                            .attr("x", 60).attr("y", 25).attr("text-anchor", "middle").attr("fill", "white");
+
+                        g.append("text").attr("class", "node-role text-xs pointer-events-none")
+                            .attr("x", 60).attr("y", 42).attr("text-anchor", "middle");
+
+                        g.append("text").attr("class", "node-status text-[10px] font-bold uppercase tracking-wide pointer-events-none")
+                            .attr("x", 60).attr("y", 58).attr("text-anchor", "middle");
+
+                        g.append("circle").attr("class", "led-left transition-colors duration-150").attr("cx", 0).attr("cy", 35).attr("r", 7);
+                        g.append("circle").attr("class", "led-right transition-colors duration-150").attr("cx", 120).attr("cy", 35).attr("r", 7);
+
+                        const fo = g.append("foreignObject").attr("x", -30).attr("y", -30).attr("width", 180).attr("height", 130);
+                        fo.append("xhtml:div")
+                            .attr("class", "w-full h-full relative opacity-0 hover:opacity-100 transition-opacity group")
+                            .html(d => `
+                                <div class="absolute inset-4 rounded-xl cursor-default border-2 border-transparent group-hover:border-white/20 transition-colors"></div>
+                                <button onclick="socket.emit('remove_node', {id: ${d.id}})" class="absolute top-1 right-2 w-7 h-7 bg-red-500 hover:bg-red-400 text-white rounded-full flex items-center justify-center font-bold shadow-lg transform hover:scale-110 transition-all z-20">&times;</button>
+                                <button onclick="socket.emit('add_node', {after_id: ${d.id}})" class="absolute top-1/2 -right-4 -translate-y-1/2 w-8 h-8 bg-blue-500 hover:bg-blue-400 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg transform hover:scale-110 transition-all z-20">+</button>
+                            `);
+                        
+                        return g;
+                    },
+                    update => update,
+                    exit => exit.remove()
+                )
+                .each(function(d) {
+                    const g = d3.select(this);
+                    
+                    g.transition().duration(400).attr("transform", `translate(${d.x - 60}, ${d.y - 35})`);
+
+                    const isBooting = !d.ring || Object.keys(d.ring).length === 0;
+                    const isMaster = d.ring?.is_master;
+                    const isIsolated = d.ring?.status === 'Isolated';
+
+                    g.select(".node-bg").attr("stroke", isMaster ? "#3b82f6" : "#374151").attr("stroke-width", isMaster ? 3 : 2);
+                    g.select(".node-crown").style("opacity", isMaster ? 1 : 0);
+                    
+                    g.select(".node-title").text(`Node ${d.id}`);
+                    g.select(".node-role").text(isBooting ? "Booting..." : (isMaster ? "Ring Master" : "Slave"))
+                     .attr("fill", isBooting ? "#6b7280" : (isMaster ? "#93c5fd" : "#9ca3af"));
+                     
+                    g.select(".node-status").text(isBooting ? "Starting..." : (d.ring.status || "INIT"))
+                     .attr("fill", isBooting ? "#f59e0b" : (d.ring.status === 'Healthy' ? "#10b981" : "#ef4444"));
+
+                    // Avoid mapping statically to IDs; fallback to indexes
+                    const p1 = d.ring?.ports?.[0];
+                    const p2 = d.ring?.ports?.[1];
+                    
+                    g.select(".led-left").attr("fill", isBooting ? "#374151" : getPortColor(p1));
+                    g.select(".led-right").attr("fill", isBooting ? "#374151" : getPortColor(p2));
+                });
+        }
+
+        // --- WebSocket Log Renderer ---
+        
+        function manageLogDOM(logsDiv) {
+            while(logsDiv.children.length > 300) {
+                logsDiv.removeChild(logsDiv.firstChild);
+            }
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        function appendPacketLog(log) {
+            if (!isLogsOpen) return;
+            const logsDiv = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = "flex items-center gap-3 border-b border-gray-800 pb-1";
+            
+            const d = new Date(log.ts * 1000);
+            const time = d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+            
+            const dropStyle = log.drop ? 'line-through opacity-50' : '';
+            const dropBadge = log.drop ? '<span class="text-red-500 font-bold ml-2">[DROPPED]</span>' : '';
+            const typeColor = log.type === 'BPDU' ? 'text-indigo-400' : (log.type === 'POLLING' ? 'text-sky-300' : 'text-yellow-400');
+            
+            div.innerHTML = `
+                <span class="text-gray-500 w-24 shrink-0">[${time}]</span>
+                <span class="w-full flex items-center gap-2 ${dropStyle}">
+                    <span class="text-blue-400 font-bold shrink-0">Node ${log.src} <span class="text-gray-500 text-xs">P${log.sport}</span></span>
+                    <span class="text-gray-600">→</span>
+                    <span class="text-emerald-400 font-bold shrink-0">Node ${log.dst ?? '?'} <span class="text-gray-500 text-xs">P${log.dport ?? '?'}</span></span>
+                    <span class="font-bold ml-2 ${typeColor}">${log.type}</span>
+                    <span class="text-gray-600 text-xs ml-auto">len:${log.len}</span>
+                </span>
+                ${dropBadge}
+            `;
+            logsDiv.appendChild(div);
+            manageLogDOM(logsDiv);
+        }
+
+        function appendRawLog(log) {
+            if (!isLogsOpen) return;
+            const logsDiv = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = "flex items-start gap-3 border-b border-gray-800 pb-1";
+            
+            const d = new Date(log.ts * 1000);
+            const time = d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+            
+            // Stylize the Node Identifier to stand out from regular logs
+            const msgHtml = log.msg.replace(/^\[Node (.*?)\]/, '<span class="text-blue-400 font-bold">[Node $1]</span>');
+            
+            div.innerHTML = `
+                <span class="text-gray-500 w-24 shrink-0">[${time}]</span>
+                <span class="w-full text-gray-400 opacity-80 font-mono whitespace-pre-wrap">${msgHtml}</span>
+            `;
+            logsDiv.appendChild(div);
+            manageLogDOM(logsDiv);
+        }
+    </script>
+</body>
+</html>

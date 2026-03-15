@@ -1,5 +1,5 @@
 """
-tr2d_structs.py  :  All data structures, constants, and enumerations
+tr2d_structs.py  —  All data structures, constants, and enumerations
 reverse-engineered from the tr2d binary (ARMv7, Moxa MOXAARM11 platform).
 
 Sources
@@ -19,9 +19,9 @@ from compat import (
     default_config_path, default_status_path,
 )
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Protocol / transport constants
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 TR2_SOCKET_PATH   = default_socket_path()
 LHC_SOCKET_PATH   = default_lhc_socket_path()
@@ -30,7 +30,7 @@ TR2_ETH_PROTO     = 0x0003                  # AF_PACKET SOCK_RAW ETH_P_ALL
 TR2_CONFIG_FILE   = default_config_path()
 TR2_STATUS_FILE   = default_status_path()
 
-# "ethD" magic : first 4 bytes of a valid TR2 BPDU payload (0x1c978 region)
+# "ethD" magic — first 4 bytes of a valid TR2 BPDU payload (0x1c978 region)
 TR2_PKT_MAGIC     = b"ethD"                 # aEthd @ 0x27258
 TR2_BPDU_DA       = bytes([0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01])
 MCAST_BPDU_DA     = bytes([0x01, 0x80, 0xc2, 0x00, 0x00, 0x00])
@@ -39,7 +39,7 @@ MCAST_BPDU_DA     = bytes([0x01, 0x80, 0xc2, 0x00, 0x00, 0x00])
 LHC_PORT_COUNT    = 4
 # wait_timeout = 4 ms  (poll timeout in tr2_ringMain)
 DEFAULT_WAIT_MS   = 4
-MAX_RINGS         = 2                       # dword_27254[3] = {1,1,1} -> 2 ring slots + coupling
+MAX_RINGS         = 2                       # dword_27254[3] = {1,1,1} → 2 ring slots + coupling
 
 # Ring-member list / polling
 POLLING_TYPE_RING     = 1
@@ -56,16 +56,16 @@ LOG_DEBUG6  = 6
 LOG_DEBUG7  = 7
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # tr2ctrl IPC command codes  (cmd word at offset 0 in 524-byte message)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class Cmd(IntEnum):
-    ACTIVATE    = ord('a')   # 97  : apply new config; payload = serialised TR2Config
-    SET_TIMEOUT = ord('i')   # 105 : set wait_timeout ms; payload[0..3] = u32 ms
-    STATUS      = ord('s')   # 115 : read status; subtype selects what
-    STATUS_W    = ord('w')   # 119 : same as 's', JSON output mode in tr2ctrl
-    TEST_TX     = ord('t')   # 116 : trigger transmit; payload[0] = pktType
+    ACTIVATE    = ord('a')   # 97  — apply new config; payload = serialised TR2Config
+    SET_TIMEOUT = ord('i')   # 105 — set wait_timeout ms; payload[0..3] = u32 ms
+    STATUS      = ord('s')   # 115 — read status; subtype selects what
+    STATUS_W    = ord('w')   # 119 — same as 's', JSON output mode in tr2ctrl
+    TEST_TX     = ord('t')   # 116 — trigger transmit; payload[0] = pktType
 
 class StatusSubtype(IntEnum):
     RING     = 0    # returns N × RingInfo (376 B each)
@@ -77,9 +77,9 @@ MSG_SIZE = 0x20C    # fixed request size: write(fd, v4, 0x20Cu)
 READ_BUF  = 0x400
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Packet types  (pktType field, byte at pkt[6] after "ethD" magic)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class PktType(IntEnum):
     POLLING          = 2    # sub_CFD4 path (s1[6]==2 branch in tr2_ringMain)
@@ -88,12 +88,12 @@ class PktType(IntEnum):
     COUPLER_NEGO     = 5    # tr2_sendCouplerNegoPkt
     COUPLER_TC       = 6    # tr2_sendCouplerTopologyChangedPkt
     FWD_REQUEST      = 7    # tr2_sendForwardingRequestNegoPkt
-    LHC              = 8    # LHC_packet check (addr.sa_data[8]==4 -> discard raw)
+    LHC              = 8    # LHC_packet check (addr.sa_data[8]==4 → discard raw)
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Port states  (Ssc_setPortState / get_portstatus_string)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class PortState(IntEnum):
     UNKNOWN    = 0
@@ -124,9 +124,9 @@ COUPLING_MODE_STR = {
 }
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # LHC port flags  (byte_2AA98[64*i + 7] bitmask)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class LhcFlags(IntFlag):
     ENABLED   = 0x01
@@ -134,7 +134,7 @@ class LhcFlags(IntFlag):
     PARTNER   = 0x04
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Config structure  (/etc/tr2_config.txt  ↔  shm_tr2SetConfig)
 #
 # Binary layout (dword_2AA58 / dword_2AA30, 0x20 bytes):
@@ -149,7 +149,7 @@ class LhcFlags(IntFlag):
 #   [8]     u8   coupling_primary port
 #   [9]     u8   coupling_backup  port
 #  (sub_13004 default: ring0 ports 9,10  ring1 ports 7,8  coupling mode 0 pri 7 bak 8)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class RingConfig:
@@ -164,7 +164,7 @@ class TR2Config:
     rings:    List[RingConfig] = field(default_factory=lambda: [RingConfig(), RingConfig()])
     coupling: 'CouplingConfig' = field(default_factory=lambda: CouplingConfig())
 
-    #  serialise to 0x20-byte shared-memory block (dword_2AA58 layout) 
+    # ── serialise to 0x20-byte shared-memory block (dword_2AA58 layout) ──
     def pack_shm(self) -> bytes:
         buf = bytearray(0x20)
         struct.pack_into("<I", buf, 0, self.enabled)
@@ -251,7 +251,7 @@ class CouplingConfig:
     backup_port:  int = 0
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # PortInfo  (embedded ×2 in RingInfo at offsets 336 and 344)
 #
 # Binary layout (8 bytes, from tr2_showBuffer offsets):
@@ -261,7 +261,7 @@ class CouplingConfig:
 #   [3]  _pad
 #   [4]  lhc_flags   u8
 #   [5..7] _pad
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class PortInfo:
@@ -290,7 +290,7 @@ class PortInfo:
         )
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # RingInfo  (376-byte on-wire structure returned by STATUS/RING)
 #
 # Offsets from tr2_showBuffer @ 0x995C and tr2_getRingInfo @ 0xA33C:
@@ -309,7 +309,7 @@ class PortInfo:
 #   [344..351] port[1]         8 bytes  PortInfo
 #   [368..371] master_age      u32  (offset 92*4 = 368)
 #   total = 376
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class RingInfo:
@@ -379,7 +379,7 @@ class RingInfo:
         }
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # CouplingInfo  (192-byte on-wire structure, STATUS/COUPLING)
 #
 # Offsets from sub_A7FC @ 0xA7FC and tr2_showBuffer case a1==1:
@@ -390,7 +390,7 @@ class RingInfo:
 #   [16] port2    u8   PortState of coupling port 2
 #   [17] port2_id u8
 #   total = 192
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class CouplingInfo:
@@ -433,7 +433,7 @@ class CouplingInfo:
         }
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # LHCPortInfo  (64-byte per-port record, STATUS/LHC)
 #
 # Offsets from tr2_showBuffer case a1==2:
@@ -448,7 +448,7 @@ class CouplingInfo:
 #   [16]     timer_act_lo    u32
 #   [40]     timer_act_hi    u32
 #   total = 64
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class LHCPortInfo:
@@ -495,7 +495,7 @@ class LHCPortInfo:
         )
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # DSA tag helpers  (sub_1B7AC parse / sub_1B89C build)
 # Marvell DSA tag is 4 bytes inserted after the 12-byte MAC header.
 #
@@ -503,10 +503,10 @@ class LHCPortInfo:
 #   byte[1]  port << 3
 #   byte[2]  high 4 bits of VID
 #   byte[3]  low  8 bits of VID
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def dsa_parse(tag: bytes):
-    """Parse 4-byte DSA tag -> (src_port, vid)  (mirrors sub_1B7AC)"""
+    """Parse 4-byte DSA tag → (src_port, vid)  (mirrors sub_1B7AC)"""
     src_port = tag[1] >> 3
     vid      = ((tag[2] & 0x0F) << 8) | tag[3]
     return src_port, vid
@@ -520,7 +520,7 @@ def dsa_build(port: int, vid: int = 0, egress: bool = False) -> bytes:
     return bytes([b0, b1, b2, b3])
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # TR2 packet on-wire layout (built in Ssc_sendTR2Packet / Ssc_sendBpduPacket)
 #
 # Ethernet frame with inserted DSA tag:
@@ -539,7 +539,7 @@ def dsa_build(port: int, vid: int = 0, egress: bool = False) -> bytes:
 #   payload[5]      = 1  (always)
 #   payload[6]      PktType
 #   payload[7..]    type-specific data
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 TR2_HDR_LLCLEN   = 3   # DSAP + SSAP + ctrl
 TR2_HDR_OVERHEAD = 6 + 6 + 4 + 2 + TR2_HDR_LLCLEN   # total before payload = 21 bytes
@@ -571,9 +571,9 @@ def build_tr2_payload(pkt_type: int, ring_id: int, data: bytes) -> bytes:
     return TR2_PKT_MAGIC + bytes([0x00, 0x01, pkt_type]) + data
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # IPC message builder / parser  (tr2_doMsgCmd @ 0xC798)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def build_msg(cmd: int, subtype: int = 0, payload: bytes = b"") -> bytes:
     """Build a 524-byte IPC request message."""
@@ -585,7 +585,7 @@ def build_msg(cmd: int, subtype: int = 0, payload: bytes = b"") -> bytes:
     return bytes(buf)
 
 def parse_msg(data: bytes):
-    """Parse a 524-byte IPC request -> (cmd, subtype, payload)."""
+    """Parse a 524-byte IPC request → (cmd, subtype, payload)."""
     cmd     = struct.unpack_from("<I", data, 0)[0]
     subtype = struct.unpack_from("<I", data, 4)[0]
     # 'a' cmd: full config block starts at offset 12 (command+12 in tr2_doMsgCmd)
@@ -593,7 +593,7 @@ def parse_msg(data: bytes):
     return cmd, subtype, payload
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Activate-command config payload layout  (tr2_doMsgCmd 'a' branch @ 0xC9AC)
 #
 # command[12..]  is the serialised config delta:
@@ -609,7 +609,7 @@ def parse_msg(data: bytes):
 #   [28]    u8   coupling_mode
 #   [29]    u8   coupling_primary
 #   [30]    u8   coupling_backup
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def pack_activate_payload(cfg: TR2Config) -> bytes:
     """Serialise TR2Config into the 'a' command payload (31 bytes used)."""

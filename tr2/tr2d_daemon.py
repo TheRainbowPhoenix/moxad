@@ -1,19 +1,19 @@
 """
-tr2d_daemon.py  :  TurboRing2 daemon  (main entry point)
+tr2d_daemon.py  —  TurboRing2 daemon  (main entry point)
 
 This is the Python equivalent of main() @ 0xCD7C in the tr2d binary.
 
 Startup sequence (mirrors binary exactly):
-  1. pthread_attr init (priority 50, SCHED_RR)          -> Python threads
-  2. atoi(argv[1]) -> SetDebugLevel
-  3. Get_Mac("eth0")  -> read own MAC
+  1. pthread_attr init (priority 50, SCHED_RR)          → Python threads
+  2. atoi(argv[1]) → SetDebugLevel
+  3. Get_Mac("eth0")  → read own MAC
   4. memset config buffers
-  5. sub_13004() -> default config init
-  6. tr2_initTx() -> open AF_PACKET raw socket on eth0
-  7. tr2_loadConfig() -> parse /etc/tr2_config.txt
-  8. tr2_activeConfig() -> apply config, start ring tasks
+  5. sub_13004() → default config init
+  6. tr2_initTx() → open AF_PACKET raw socket on eth0
+  7. tr2_loadConfig() → parse /etc/tr2_config.txt
+  8. tr2_activeConfig() → apply config, start ring tasks
   9. signal handlers
-  10. tr2_msgHandler() -> UNIX socket loop (blocking)
+  10. tr2_msgHandler() → UNIX socket loop (blocking)
 
 Usage:
     python3 tr2d_daemon.py [debug_level]  # debug_level 3..7 (default 5)
@@ -61,14 +61,14 @@ from compat import (
 )
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # log_printf shim
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 _debug_level = 5
 
 def log_printf(level: int, fmt: str, *args):
-    """log_printf() @ 0x1C744 : only emit if level <= debug_level"""
+    """log_printf() @ 0x1C744 — only emit if level <= debug_level"""
     if level <= _debug_level:
         msg = fmt % args if args else fmt
         logging.getLogger("tr2d").log(
@@ -80,9 +80,9 @@ def SetDebugLevel(level: int):
     _debug_level = level
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # tr2_sendRingInfo / tr2_sendCouplingInfo  (reply helpers)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_sendRingInfo(client_fd: int, rings: List[RingState]):
     """tr2_sendRingInfo @ 0xC644"""
@@ -121,40 +121,45 @@ def tr2_setWaitTime(ms: int):
 _wait_timeout_ms = 4
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # tr2_doMsgCmd  (@ 0xC798)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_doMsgCmd(client_fd: int, command: bytes,
                   rings: List[RingState],
                   coupling: Optional[CouplingState],
                   lhc_thread: SlhcThread,
                   ssc: Ssc,
-                  cfg_shm: TR2Config):
+                  cfg_shm: TR2Config,
+                  daemon: "TR2Daemon" = None):
     """
     tr2_doMsgCmd @ 0xC798
     Dispatch an IPC command received on /tmp/tr2socket.
+    daemon ref is passed so activate can start ring threads on-the-fly.
     """
     cmd, subtype, payload = parse_msg(command)
     log_printf(LOG_DEBUG7, "command = %d\n", cmd)
 
     if cmd == Cmd.ACTIVATE:
-        # 'a' : apply new configuration
+        # 'a' — apply new configuration
         new_cfg = unpack_activate_payload(payload)
         cfg_shm.enabled  = new_cfg.enabled
         cfg_shm.rings    = new_cfg.rings
         cfg_shm.coupling = new_cfg.coupling
         log_printf(LOG_DEBUG7, "tr2_doMsgCmd() %d Active configuration change\n", 1290)
         tr2_activeConfig(cfg_shm, rings, coupling, ssc)
+        # start ring threads for newly-enabled rings (not started at boot)
+        if daemon is not None:
+            daemon._ensure_ring_threads(cfg_shm)
 
     elif cmd == Cmd.SET_TIMEOUT:
-        # 'i' : set wait timeout
+        # 'i' — set wait timeout
         ms = struct.unpack_from("<I", payload, 0)[0] if len(payload) >= 4 else 0
         log_printf(LOG_DEBUG7, "tr2_doMsgCmd() waitTime = %d %d\n", ms, subtype)
         tr2_setWaitTime(ms)
 
     elif cmd in (Cmd.STATUS, Cmd.STATUS_W):
-        # 's'/'w' : status query
+        # 's'/'w' — status query
         if subtype == StatusSubtype.RING:
             tr2_sendRingInfo(client_fd, rings)
         elif subtype == StatusSubtype.COUPLING:
@@ -165,7 +170,7 @@ def tr2_doMsgCmd(client_fd: int, command: bytes,
             log_printf(LOG_ERROR, "tr2_doMsgCmd() MUST not be here!\n")
 
     elif cmd == Cmd.TEST_TX:
-        # 't' : test transmit trigger
+        # 't' — test transmit trigger
         pkt_type = payload[0] if payload else 0
         log_printf(LOG_DEBUG7,
                    "tr2_doMsgCmd() trigger pktType = %d TTTTTTTTTTTT\n", pkt_type)
@@ -177,18 +182,19 @@ def tr2_doMsgCmd(client_fd: int, command: bytes,
         log_printf(LOG_DEBUG7, "tr2_doMsgCmd: unknown cmd %d\n", cmd)
 
 
-# 
-# tr2_msgHandler  (@ 0xCBA8) : UNIX socket accept loop
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# tr2_msgHandler  (@ 0xCBA8) — UNIX socket accept loop
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_msgHandler(rings: List[RingState],
                     coupling: Optional[CouplingState],
                     lhc_thread: SlhcThread,
                     ssc: Ssc,
                     cfg_shm: TR2Config,
-                    socket_path: str = TR2_SOCKET_PATH):
+                    socket_path: str = TR2_SOCKET_PATH,
+                    daemon: "TR2Daemon" = None):
     """
-    tr2_msgHandler @ 0xCBA8  : blocking UNIX socket server loop.
+    tr2_msgHandler @ 0xCBA8  — blocking UNIX socket server loop.
     Handles tr2ctrl connections.
     """
     # create cross-platform IPC server
@@ -206,13 +212,24 @@ def tr2_msgHandler(rings: List[RingState],
                     if not chunk:
                         break
                     buf += chunk
-                if not buf:
+                if len(buf) < MSG_SIZE:
+                    # EOF or partial — connection closing
                     log_printf(LOG_DEBUG5, "Ending connection\n")
                     break
                 log_printf(LOG_DEBUG7,
                            "tr2_msgHandler() Get Msg >>>>>>>>>>>>>>> \n")
                 tr2_doMsgCmd(conn, buf,
-                              rings, coupling, lhc_thread, ssc, cfg_shm)
+                              rings, coupling, lhc_thread, ssc, cfg_shm, daemon)
+                # If client half-closed (SHUT_WR), detect EOF and exit
+                conn.settimeout(0.05)
+                try:
+                    tail = conn.recv(1)
+                    if not tail:
+                        break
+                except socket.timeout:
+                    pass
+                finally:
+                    conn.settimeout(None)
         except OSError as e:
             log_printf(LOG_ERROR, "reading stream message: %s\n", str(e))
         finally:
@@ -229,18 +246,18 @@ def tr2_msgHandler(rings: List[RingState],
         t.start()
 
 
-# 
-# Get_Mac  : read interface MAC  (called as Get_Mac(&byte_27314))
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# Get_Mac  — read interface MAC  (called as Get_Mac(&byte_27314))
+# ─────────────────────────────────────────────────────────────────────────────
 
 def Get_Mac(iface: str = TR2_ETH_IFACE) -> bytes:
-    """Read MAC address for iface : cross-platform via compat."""
+    """Read MAC address for iface — cross-platform via compat."""
     return get_iface_mac(iface)
 
 
-# 
-# tr2_initTx  (@ 0x12EA4) : open raw TX socket on eth0
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# tr2_initTx  (@ 0x12EA4) — open raw TX socket on eth0
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_initTx(iface: str = TR2_ETH_IFACE):
     """
@@ -255,13 +272,13 @@ def tr2_initTx(iface: str = TR2_ETH_IFACE):
     return sock
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # default config init  (sub_13004 @ 0x13004)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _default_config_init(cfg: TR2Config):
     """
-    sub_13004 @ 0x13004 : hardcoded default port assignments.
+    sub_13004 @ 0x13004 — hardcoded default port assignments.
     ring0: ports 9, 10  (port0=9 port1=10)
     ring1: ports 7,  8
     coupling: mode=0 primary=7 backup=8
@@ -272,9 +289,9 @@ def _default_config_init(cfg: TR2Config):
                                    primary_port=7, backup_port=8)
 
 
-# 
-# TR2Daemon  :  top-level orchestrator
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# TR2Daemon  —  top-level orchestrator
+# ─────────────────────────────────────────────────────────────────────────────
 
 class TR2Daemon:
     """
@@ -303,48 +320,56 @@ class TR2Daemon:
         self.socket_path = socket_path
         self.use_sim     = use_sim
 
-        #  shared config state (dword_2AA30 / dword_2AA58) 
-        self.cfg_default = TR2Config()     # dword_2AA30 : "hardware defaults"
-        self.cfg_active  = TR2Config()     # dword_2AA58 : "active config"
+        # ── shared config state (dword_2AA30 / dword_2AA58) ──────────────────
+        self.cfg_default = TR2Config()     # dword_2AA30 — "hardware defaults"
+        self.cfg_active  = TR2Config()     # dword_2AA58 — "active config"
         _default_config_init(self.cfg_default)
         _default_config_init(self.cfg_active)
 
-        #  MAC / raw socket 
+        # ── MAC / raw socket ──────────────────────────────────────────────────
         self.mac   = bytes(6)
         self.tx_fd = -1
         self.raw_fd = -1
 
-        #  switch backend 
+        # ── switch backend ────────────────────────────────────────────────────
         if use_sim:
             self.backend = SimSwitchBackend(port_count=10)
         else:
             self.backend = LinuxSwitchBackend(iface=iface)
         self.ssc = Ssc(self.backend)
 
-        #  ring state  (up to MAX_RINGS rings + 1 coupling) 
+        # ── ring state  (up to MAX_RINGS rings + 1 coupling) ─────────────────
         self.rings: List[RingState] = []
         self.coupling: Optional[CouplingState] = None
 
-        #  threads 
+        # ── threads ───────────────────────────────────────────────────────────
         self._ring_mains: List[RingMainThread] = []
         self._ring_auxes: List[RingAuxThread]  = []
         self._lhc_thread: Optional[SlhcThread] = None
         self._msg_thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
-    #  public API 
+    # ── public API ─────────────────────────────────────────────────────────────
 
     def start(self):
         """Full startup sequence mirroring main() @ 0xCD7C."""
         log_printf(LOG_NOTICE, "tr2d starting (sim=%s)\n", self.use_sim)
 
-        # 1. Get MAC
-        self.mac = Get_Mac(self.iface)
-        self.ssc.mac = self.mac
+        # 1. Get MAC — only overwrite if not already configured (sim callers set it before start())
+        discovered_mac = Get_Mac(self.iface)
+        if self.mac == bytes(6) and self.ssc.mac == bytes(6):
+            self.mac = discovered_mac
+            self.ssc.mac = self.mac
+        elif self.ssc.mac != bytes(6):
+            # caller already set a specific MAC on ssc — trust it
+            self.mac = self.ssc.mac
+        else:
+            self.mac = discovered_mac
+            self.ssc.mac = self.mac
         log_printf(LOG_DEBUG5, "MAC: %s\n",
                    ":".join(f"{b:02x}" for b in self.mac))
 
-        # 2. tr2_initTx : raw socket
+        # 2. tr2_initTx — raw socket
         if not self.use_sim:
             self.tx_fd = tr2_initTx(self.iface)
             if self.tx_fd < 0:
@@ -372,7 +397,7 @@ class TR2Daemon:
         rc = self._apply_config(loaded)
         if rc < 0:
             log_printf(LOG_ERROR, "Configuration loading error\n")
-            # still continue : default config stays
+            # still continue — default config stays
 
         # 6. Signal handlers (main thread only; SIGHUP skipped on Windows)
         safe_signal(SIGHUP,  self._sig_handler)
@@ -383,7 +408,7 @@ class TR2Daemon:
         self._msg_thread = threading.Thread(
             target=tr2_msgHandler,
             args=(self.rings, self.coupling, self._lhc_thread,
-                  self.ssc, self.cfg_active, self.socket_path),
+                  self.ssc, self.cfg_active, self.socket_path, self),
             daemon=True, name="tr2_msgHandler")
         self._msg_thread.start()
 
@@ -412,7 +437,7 @@ class TR2Daemon:
             self._lhc_thread.stop()
         ipc_cleanup(self.socket_path)
 
-    #  internal 
+    # ── internal ──────────────────────────────────────────────────────────────
 
     def _apply_config(self, cfg: TR2Config) -> int:
         """tr2_loadConfig + tr2_activeConfig combined."""
@@ -428,24 +453,41 @@ class TR2Daemon:
             )
 
         tr2_activeConfig(self.cfg_active, self.rings, self.coupling, self.ssc)
+        self._ensure_ring_threads(cfg)
+        return 0
 
-        # Start ring threads for enabled rings
+    def _ensure_ring_threads(self, cfg: TR2Config):
+        """
+        Start RingMainThread for any enabled ring that doesn't have a live thread.
+        Called both from _apply_config (at boot) and from tr2_doMsgCmd activate
+        (live reconfiguration).
+        """
+        running = {rm.ring.id for rm in self._ring_mains
+                   if rm._thread and rm._thread.is_alive()}
         for i, ring in enumerate(self.rings):
-            rcfg = cfg.rings[i]
-            if rcfg.enabled:
+            rcfg = cfg.rings[i] if i < len(cfg.rings) else None
+            if rcfg and rcfg.enabled and i not in running:
+                # propagate priority / master status immediately
+                ring.priority  = rcfg.priority
+                ring.is_master = 1 if rcfg.priority == 0 else 0
+                ring.main_port   = rcfg.port0
+                ring.backup_port = rcfg.port1
+                ring.ports[0].port_id = rcfg.port0
+                ring.ports[1].port_id = rcfg.port1
+                ring.active = 1
+                log_printf(LOG_NOTICE,
+                           "Starting RingMainThread ring=%d master=%d\n",
+                           i, ring.is_master)
                 rm = RingMainThread(
-                    ring, self.cfg_active, self.ssc,
+                    ring, cfg, self.ssc,
                     self.tx_fd, self.raw_fd,
-                    self.mac, self.mac)   # bridge IDs initialised to own MAC
+                    self.mac, self.mac)
                 rm.start()
                 self._ring_mains.append(rm)
-
                 if cfg.coupling.mode != CouplingMode.NONE:
                     ra = RingAuxThread(ring, self.ssc, self.tx_fd, self.raw_fd)
                     ra.start()
                     self._ring_auxes.append(ra)
-
-        return 0
 
     def _sig_handler(self, signum, frame):
         """tr2_sighandler @ 0x9778"""
@@ -453,9 +495,9 @@ class TR2Daemon:
         self._stop.set()
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Multi-instance manager  (for debugging multiple virtual switches)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class TR2DaemonManager:
     """Spawn N independent tr2d instances (different sockets)."""
@@ -498,9 +540,9 @@ class TR2DaemonManager:
         return out
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # tr2ctrl Python client  (same as tr2d.py, kept here for convenience)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 class TR2Client:
     """Python equivalent of the tr2ctrl binary."""
@@ -512,6 +554,13 @@ class TR2Client:
               payload: bytes = b"") -> bytes:
         sock = ipc_connect(self.path)
         sock.sendall(build_msg(cmd, subtype, payload))
+        # Half-close the write side: signals to the server that we sent one
+        # complete command; the server then closes its end after replying,
+        # so our read loop terminates on EOF instead of waiting 2 s.
+        try:
+            sock.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
         reply = b""
         sock.settimeout(2.0)
         try:
@@ -550,9 +599,9 @@ class TR2Client:
         self._send(Cmd.TEST_TX, payload=bytes([pkt_type]))
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry point
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     ap = argparse.ArgumentParser(description="TurboRing2 daemon (Python)")

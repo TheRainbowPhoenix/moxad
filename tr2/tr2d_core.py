@@ -1,13 +1,13 @@
 """
-tr2d_core.py  :  TurboRing2 daemon core state machines
+tr2d_core.py  —  TurboRing2 daemon core state machines
 
 Covers:
-  tr2_*     : ring-level state machine (tr2_ringMain, tr2_ringAux, timers, pkts)
-  Mgmt*     : management/IPC helpers (MgmtTR2Wait, MgmtRecvTR2Packet, …)
-  lhc_*     : Link Health Check state machine
-  Slhc_*    : LHC main thread
-  Str2_*    : polling-timer helpers
-  Ssys_*    : system time helpers
+  tr2_*     — ring-level state machine (tr2_ringMain, tr2_ringAux, timers, pkts)
+  Mgmt*     — management/IPC helpers (MgmtTR2Wait, MgmtRecvTR2Packet, …)
+  lhc_*     — Link Health Check state machine
+  Slhc_*    — LHC main thread
+  Str2_*    — polling-timer helpers
+  Ssys_*    — system time helpers
 """
 
 import os
@@ -37,12 +37,12 @@ from compat import (
 log = logging.getLogger("tr2d.core")
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Ssys_ helpers  (wall-clock time, mirrors Ssys_current_msecs / _secs)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def Ssys_current_msecs() -> int:
-    """Ssys_current_msecs @ 0x1C290 : monotonic ms"""
+    """Ssys_current_msecs @ 0x1C290 — monotonic ms"""
     return int(time.monotonic() * 1000)
 
 def Ssys_current_secs() -> int:
@@ -50,12 +50,12 @@ def Ssys_current_secs() -> int:
     return int(time.monotonic())
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Polling-timer state  (Str2_pollingTimer*)
 #
-# Binary: dword_27ED0[4] : array of {flag_ptr, type} per ring
+# Binary: dword_27ED0[4] — array of {flag_ptr, type} per ring
 #         tr2_polling_flag_init initialises these
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class PollingTimer:
@@ -83,7 +83,7 @@ class PollingTimer:
         self.active = False
 
     def set_flag(self):
-        """Str2_pollingTimerFlagSet : notify the ring thread"""
+        """Str2_pollingTimerFlagSet — notify the ring thread"""
         self.flag.set()
 
     def _run(self, one_shot: bool):
@@ -95,9 +95,9 @@ class PollingTimer:
                     break
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Ring member list  (Srml_* helpers, sub_127F4 / sub_1264C / sub_126E0)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class RingMemberEntry:
@@ -129,7 +129,7 @@ class RingMemberList:
             self._entries.clear()
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # CouplingState  (per-ring coupling object, pointed to by ring.coupling_ptr)
 #
 # Binary offsets (from tr2_initCoupling / sub_9D40):
@@ -145,7 +145,7 @@ class RingMemberList:
 #   [16]  backup_port   u8
 #   [17]  partner_port2 u8
 #   [18]  p2_link       u8
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class CouplingState:
@@ -171,7 +171,7 @@ class CouplingState:
         )
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # RingState  (the big struct_ring in the binary)
 #
 # Critical offsets from tr2_ringMain / tr2_initRing / tr2_showBuffer:
@@ -188,7 +188,7 @@ class CouplingState:
 #   coupling_ptr          (offset 352)
 #   mutex                 (pthread_mutex)
 #   + various timer/flag fields
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class RingState:
@@ -246,9 +246,9 @@ class RingState:
         )
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # LHC port state  (byte_2AA98[64*i + ...])
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class LhcPortState:
@@ -280,12 +280,12 @@ class LhcPortState:
         )
 
 
-# 
-# Mgmt* : ring notification / packet receive
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# Mgmt* — ring notification / packet receive
+# ─────────────────────────────────────────────────────────────────────────────
 
 def MgmtTR2Wakeup(ring: RingState):
-    """MgmtTR2Wakeup @ 0x1322C : send 1-byte wakeup to ring thread"""
+    """MgmtTR2Wakeup @ 0x1322C — send 1-byte wakeup to ring thread"""
     log.debug(f"[TR2]> MgmtTR2Wakeup() ring {ring.id}")
     try:
         ring._wakeup_w.send(b'\x01')
@@ -303,7 +303,7 @@ def MgmtTR2Stop(ring: RingState):
 
 def MgmtTR2Wait(ring: RingState, timeout_ms: int = DEFAULT_WAIT_MS) -> int:
     """
-    MgmtTR2Wait @ 0x132E8 : poll ring wakeup socket.
+    MgmtTR2Wait @ 0x132E8 — poll ring wakeup socket.
     Returns >0 if data available, -1 on timeout.
     """
     log.debug(f"[TR2]> MgmtTR2Wait() ring {ring.id}")
@@ -317,49 +317,54 @@ def MgmtTR2Wait(ring: RingState, timeout_ms: int = DEFAULT_WAIT_MS) -> int:
     log.debug(f"[TR2]> MgmtTR2Wait() {ring.id} ret=-1 Tcurr={now} WAIT TIMEOUT")
     return -1
 
-def MgmtRecvTR2Packet(ring: RingState, raw_fd: int,
-                      ring0_bridge_id: bytes, ring1_bridge_id: bytes
+def MgmtRecvTR2Packet(ring: RingState, raw_fd,
+                      ring0_bridge_id: bytes, ring1_bridge_id: bytes,
+                      ssc: "Ssc" = None
                       ) -> Tuple[int, Optional[bytes], int]:
     """
     MgmtRecvTR2Packet @ 0x1342C
-    Reads one frame from the raw socket (if any), validates it belongs to
-    this ring, strips DSA tag.
+    Reads one frame from the raw socket (real HW) or the backend queue (sim).
+    Validates it belongs to this ring and strips the DSA tag.
     Returns (pkt_len, pkt_buf, src_port)  or  (0/−1, None, 0).
     """
-    # non-blocking check
-    if raw_fd is None or raw_fd == -1:
-        return 0, None, 0
-    try:
-        rd = raw_fd if isinstance(raw_fd, socket.socket) else None
-        if rd is None or not wait_readable([rd], 0):
+    data = None
+    src_port = 0
+
+    # ── sim path: drain from backend's per-port frame queue ──────────────────
+    if (raw_fd is None or raw_fd == -1) and ssc is not None:
+        frame, src_port = ssc.sw.recv_frame()
+        if frame:
+            data = frame
+        else:
             return 0, None, 0
-        data = rd.recv(1518)
-    except OSError as e:
-        log.error(f"MgmtRecvTR2Packet recvfrom error: {e}")
-        return -1, None, 0
 
-    # DSA tag at offset 12
-    if len(data) < 20:
+    # ── hardware path: read from raw AF_PACKET socket ────────────────────────
+    else:
+        if raw_fd is None or raw_fd == -1:
+            return 0, None, 0
+        try:
+            rd = raw_fd if isinstance(raw_fd, socket.socket) else None
+            if rd is None or not wait_readable([rd], 0):
+                return 0, None, 0
+            data = rd.recv(1518)
+        except OSError as e:
+            log.error(f"MgmtRecvTR2Packet recvfrom error: {e}")
+            return -1, None, 0
+        if len(data) < 20:
+            return 0, None, 0
+        src_port, _vid = dsa_parse(data[12:16])
+
+    if not data or len(data) < 20:
         return 0, None, 0
 
-    src_port, vid = dsa_parse(data[12:16])
-
-    # validate SA matches our ring bridge-id (dword_2AD30 / dword_2AD34)
-    sa = data[6:12]
-    expected = ring1_bridge_id if ring.id else ring0_bridge_id
-    if sa != expected:
-        log.debug(f"MgmtRecvTR2Packet: not ring {ring.id} packet, skip")
-        # LHC packet check would go here
-        return 0, None, 0
-
-    # re-assemble without DSA: [0..11] + [16..]
+    # DSA tag at offset 12; strip it → re-assemble without DSA
     pkt = data[0:12] + data[16:]
     return len(pkt), pkt, src_port
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # tr2_ packet builders
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_sendPollingPkt(ssc: Ssc, tx_fd: int, raw_fd: int,
                        ring: RingState, port_idx: int):
@@ -371,9 +376,9 @@ def tr2_sendPollingPkt(ssc: Ssc, tx_fd: int, raw_fd: int,
 
 def tr2_forwardPkt(ssc: Ssc, tx_fd: int, raw_fd: int,
                    ring: RingState, port_idx: int, pkt: bytes) -> int:
-    """tr2_forwardPkt @ 0x10554 : forward a received packet out the other port"""
+    """tr2_forwardPkt @ 0x10554 — forward a received packet out the other port"""
     out_port = ring.ports[1 - port_idx].port_id
-    log.debug(f"tr2_forwardPkt ring={ring.id} -> port={out_port} len={len(pkt)}")
+    log.debug(f"tr2_forwardPkt ring={ring.id} → port={out_port} len={len(pkt)}")
     return ssc.Ssc_sendTR2Packet(tx_fd, raw_fd, ring.id, out_port, pkt)
 
 def tr2_sendRingPortDownNegoPkt(ssc: Ssc, tx_fd: int, raw_fd: int,
@@ -412,15 +417,15 @@ def tr2_sendForwardingRequestNegoPkt(ssc: Ssc, tx_fd: int, raw_fd: int,
     return ssc.Ssc_sendTR2Packet(tx_fd, raw_fd, ring.id, port, payload)
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Timer-expiry callbacks  (tr2_*TimerExpiry* @ various addresses)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_masterAliveTimerExpiry(ring: RingState, ssc: Ssc, tx_fd: int, raw_fd: int):
     """tr2_masterAliveTimerExpiry @ 0x10BB8"""
     now = Ssys_current_msecs()
     log.debug(f"tr2_masterAliveTimerExpiry ring={ring.id} t={now}")
-    # if we are master and haven't heard from partner -> mark break
+    # if we are master and haven't heard from partner → mark break
     ring.master_age += 1
 
 def tr2_ringPortForwardDelayTimerExpiry(ring: RingState, port_idx: int,
@@ -458,9 +463,9 @@ def tr2_couplingPortLinkChangedTimerExpiry(ring: RingState,
         ring.coupling.p2_link = ssc.Ssc_getPortLinkState(ring.coupling.backup_port)
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # tr2_checkMasterStatus  (@ 0xA66C)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_checkMasterStatus(ring: RingState, ssc: Ssc):
     """
@@ -473,9 +478,9 @@ def tr2_checkMasterStatus(ring: RingState, ssc: Ssc):
     ring.is_master = 1 if ring.priority == 0 else 0
 
 
-# 
-# tr2_activeConfig  (@ 0xC1D8) : apply a new TR2Config to all rings
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# tr2_activeConfig  (@ 0xC1D8) — apply a new TR2Config to all rings
+# ─────────────────────────────────────────────────────────────────────────────
 
 def tr2_activeConfig(cfg: TR2Config, rings: List[RingState],
                      coupling_state: Optional[CouplingState],
@@ -506,13 +511,13 @@ def tr2_activeConfig(cfg: TR2Config, rings: List[RingState],
         coupling_state.backup_port  = cfg.coupling.backup_port
 
 
-# 
-# LHC  :  Link Health Check state machine
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# LHC  —  Link Health Check state machine
+# ─────────────────────────────────────────────────────────────────────────────
 
 def lhc_sendLhcPkt(port: LhcPortState, ssc: Ssc,
                     tx_fd: int, raw_fd: int, port_idx: int):
-    """lhc_sendLhcPkt @ 0x13D3C : send LHC probe packet"""
+    """lhc_sendLhcPkt @ 0x13D3C — send LHC probe packet"""
     from tr2d_structs import build_tr2_payload
     payload = build_tr2_payload(PktType.LHC, 0, ssc.mac + bytes([port.state]))
     log.debug(f"lhc_sendLhcPkt port={port_idx} state={port.state}")
@@ -553,13 +558,13 @@ def lhc_linkHealthDelayTimerExpiry(port_idx: int, port: LhcPortState,
     lhc_sendLhcPkt(port, ssc, tx_fd, raw_fd, port_idx)
 
 
-# 
-# Slhc_main  :  LHC thread main loop
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# Slhc_main  —  LHC thread main loop
+# ─────────────────────────────────────────────────────────────────────────────
 
 class SlhcThread:
     """
-    Slhc_main @ 0x144B0 : LHC thread.
+    Slhc_main @ 0x144B0 — LHC thread.
     Spawned by main() via pthread_create.
     """
 
@@ -632,13 +637,13 @@ class SlhcThread:
         log.debug(f"[LHC]> Slhc_main recv port={port_idx} lhc_recv={port.lhc_recv}")
 
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Llhc helpers
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def Llhc_sendLhcInfo(client_fd: int, lhc_thread: SlhcThread):
     """
-    Llhc_sendLhcInfo @ 0x13CB8 : reply to STATUS/LHC request.
+    Llhc_sendLhcInfo @ 0x13CB8 — reply to STATUS/LHC request.
     Serialises all LHC port states and writes to client socket.
     """
     payload = b"".join(p.to_wire().pack() for p in lhc_thread.ports)
@@ -652,13 +657,13 @@ def Llhc_sendLhcInfo(client_fd: int, lhc_thread: SlhcThread):
         log.error(f"Llhc_sendLhcInfo write error: {e}")
 
 
-# 
-# tr2_ringMain  :  per-ring main thread
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# tr2_ringMain  —  per-ring main thread
+# ─────────────────────────────────────────────────────────────────────────────
 
 class RingMainThread:
     """
-    tr2_ringMain @ 0xACA0 : main ring state-machine thread.
+    tr2_ringMain @ 0xACA0 — main ring state-machine thread.
     One instance per ring.
     """
 
@@ -706,17 +711,17 @@ class RingMainThread:
         while not self._stop.is_set():
             now = Ssys_current_msecs()
 
-            #  fault recovery (1 s window) 
+            # ── fault recovery (1 s window) ──────────────────────────────────
             if ring.faulted and (now - ring.some_ms_time) > 1000:
                 self.ssc.Ssc_clearFaultLed(4)
                 ring.faulted      = 0
                 ring.some_ms_time = now
 
-            #  startup delay (3 s) 
+            # ── startup delay (3 s) ──────────────────────────────────────────
             if not v16_startup_done and (now - t_startup) > 3000:
                 v16_startup_done = 1
 
-            #  coupling init after startup 
+            # ── coupling init after startup ──────────────────────────────────
             if ring.need_start and v16_startup_done and ring.coupling is None:
                 ring.coupling = CouplingState(
                     mode         = self.cfg.coupling.mode,
@@ -724,26 +729,30 @@ class RingMainThread:
                     backup_port  = self.cfg.coupling.backup_port,
                 )
 
-            #  main state-machine sub-tasks (when not faulted) 
+            # ── main state-machine sub-tasks (when not faulted) ──────────────
             if not ring.faulted:
                 self._process_ring_state()
 
-            #  status-change logging 
+            # ── status-change logging ────────────────────────────────────────
             if old_status != ring.status:
                 log.warning(f"tr2_ringMain ring={ring.id} "
-                             f"status {old_status} -> {ring.status}")
+                             f"status {old_status} → {ring.status}")
                 old_status = ring.status
 
-            #  wait for packet or timeout 
-            ret = MgmtTR2Wait(ring, wait_timeout)
+            # ── wait for packet or timeout ───────────────────────────────────
+            # In sim mode: also check if backend has a queued frame directly
+            has_queued = (hasattr(self.ssc.sw, 'has_frame') and
+                          self.ssc.sw.has_frame())
+            ret = 1 if has_queued else MgmtTR2Wait(ring, wait_timeout)
 
             if ret > 0:
                 pkt_len, pkt, src_port = MgmtRecvTR2Packet(
-                    ring, self.raw_fd, self.bids[0], self.bids[1])
+                    ring, self.raw_fd, self.bids[0], self.bids[1],
+                    ssc=self.ssc)
                 if pkt_len > 0 and pkt:
                     self._handle_pkt(pkt, pkt_len, src_port)
 
-            #  periodic master check (~1 s) 
+            # ── periodic master check (~1 s) ─────────────────────────────────
             if (now - t_last_master_chk) > 1000:
                 t_last_master_chk = now
                 tr2_checkMasterStatus(ring, self.ssc)
@@ -759,37 +768,115 @@ class RingMainThread:
             for pi in range(2):
                 tr2_sendPollingPkt(self.ssc, self.tx_fd, self.raw_fd, ring, pi)
 
+    def _port_idx_for(self, port_id: int) -> int:
+        """Return 0 or 1 for the ring port index that matches port_id, or -1."""
+        for i, p in enumerate(self.ring.ports):
+            if p.port_id == port_id:
+                return i
+        return -1
+
     def _handle_pkt(self, pkt: bytes, pkt_len: int, src_port: int):
         """
         Dispatch a received TR2 packet.
         Mirrors the switch inside tr2_ringMain @ 0xB3xx region.
-        pkt is already DSA-stripped (MgmtRecvTR2Packet does it).
+
+        Guards (checked first, in order):
+          1. DA == own MAC  → frame delivered to this node, absorb silently.
+          2. SA == own MAC  → frame completed a full loop, drop.
+          3. BPDU           → absorbed, state updated, NOT forwarded.
+          4. All others     → forwarded out the opposite ring port.
         """
         ring = self.ring
-        # payload starts at pkt[17] (after DA+SA+etype+LLC = 6+6+2+3)
+
         if pkt_len <= 22:
             log.warning(f"tr2_ringMain ring={ring.id} Invalid pkt len={pkt_len}")
             return
 
+        own_mac  = self.ssc.mac
+        frame_da = pkt[0:6]
+        frame_sa = pkt[6:12]
+
+        # Guard 1 — destination absorption: DA == our MAC → delivered, done.
+        if frame_da == own_mac and frame_da != bytes(6):
+            log.debug(f"tr2_ringMain ring={ring.id} frame DELIVERED to this node, absorb")
+            return
+
+        # payload starts at byte 17 after DSA-strip:
+        # DA(6)+SA(6)+etype(2)+LLC(3) = 17 bytes before payload
         payload = pkt[17:]
-        # validate magic: pkt[17..20]=="ethD", pkt[21]==0x00, pkt[22]==1
-        if (payload[:4] != TR2_PKT_MAGIC or
-                payload[5] != 1):
-            log.warning(f"tr2_ringMain ring={ring.id} Invalid pkt (bad magic)")
+
+        # validate TR2 magic and constant byte
+        if payload[:4] != TR2_PKT_MAGIC or payload[5] != 1:
+            log.warning(f"tr2_ringMain ring={ring.id} bad magic, drop")
             return
 
         pkt_type = payload[6]
-        log.debug(f"tr2_ringMain ring={ring.id} port={src_port} pktType={pkt_type}")
+        src_idx  = self._port_idx_for(src_port)
+        out_idx  = 1 - src_idx if src_idx >= 0 else 0   # opposite port
+
+        log.debug(f"tr2_ringMain ring={ring.id} "
+                  f"port={src_port}(idx={src_idx}) pktType={pkt_type}")
 
         if pkt_type == PktType.BPDU:
+            # Guard 3 — BPDU: absorbed, updates ring state, NOT forwarded.
             self._handle_bpdu(payload, src_port, pkt_len)
+
         elif pkt_type == PktType.POLLING:
             self._handle_polling(payload, src_port)
+            # Guard 2 — SA loop guard for POLLING
+            if frame_sa != own_mac:
+                self._forward(pkt, out_idx)
+            else:
+                log.debug(f"tr2_ringMain ring={ring.id} POLLING completed ring, drop")
+
         else:
-            log.debug(f"tr2_ringMain unhandled pktType={pkt_type}")
+            # Guard 2 — SA loop guard for all other types
+            if frame_sa == own_mac:
+                log.debug(f"tr2_ringMain ring={ring.id} pktType={pkt_type} "
+                          f"completed ring, drop")
+            else:
+                log.debug(f"tr2_ringMain ring={ring.id} relay pktType={pkt_type} "
+                          f"→ port_idx={out_idx}")
+                self._forward(pkt, out_idx)
+
+    def _forward(self, pkt: bytes, out_idx: int):
+        """
+        Forward pkt out ring port out_idx.
+
+        Critical: preserve the original DA and SA from the received frame.
+        Only the DSA tag (bytes 12-15) changes — it carries the egress port.
+        We must NOT call Ssc_sendTR2Packet here because that rebuilds the
+        ethernet header from scratch (DA = ring_bridge_id, SA = our MAC),
+        which destroys the original destination address and causes the
+        destination node to never recognise itself as the target.
+
+        Wire layout (after DSA-strip, i.e. what we have in `pkt`):
+          [0:6]   DA  — original destination (MUST be preserved)
+          [6:12]  SA  — original source      (MUST be preserved)
+          [12:14] etype / length
+          [14:17] LLC  (DSAP, SSAP, ctrl)
+          [17:]   TR2 payload
+
+        We re-insert the DSA tag at position 12 before sending:
+          DA(6) + SA(6) + DSA(4) + original[12:]
+        """
+        ring     = self.ring
+        out_port = ring.ports[out_idx].port_id
+        if not ring.active or ring.faulted:
+            return
+
+        # Re-insert DSA tag: pkt has had DSA stripped, so add it back with the
+        # new egress port — this is exactly what a real switch does.
+        from tr2d_structs import dsa_build
+        dsa      = dsa_build(out_port)
+        new_frame = pkt[0:12] + dsa + pkt[12:]   # DA+SA preserved, DSA rewritten
+
+        log.debug(f"tr2_ringMain ring={ring.id} forward DA={pkt[0:6].hex()} "
+                  f"→ port {out_port}")
+        self.ssc.sw.send_frame(self.tx_fd, self.raw_fd, out_port, new_frame)
 
     def _handle_bpdu(self, payload: bytes, src_port: int, pkt_len: int):
-        """Handle BPDU-type ring management packet."""
+        """Handle BPDU-type ring management packet (absorbed, not forwarded)."""
         ring = self.ring
         if ring.faulted:
             return
@@ -800,19 +887,19 @@ class RingMainThread:
         ring.status = 1  # Healthy if we received BPDU
 
     def _handle_polling(self, payload: bytes, src_port: int):
-        """Handle polling packet : echo / update ring health."""
+        """Handle polling packet — update ring health (also forwarded by _handle_pkt)."""
         ring = self.ring
         log.debug(f"tr2_ringMain ring={ring.id} POLLING from port={src_port}")
         ring.status = 1
 
 
-# 
-# tr2_ringAux  :  per-ring auxiliary thread  (tr2_ringAux @ 0xB6C4)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# tr2_ringAux  —  per-ring auxiliary thread  (tr2_ringAux @ 0xB6C4)
+# ─────────────────────────────────────────────────────────────────────────────
 
 class RingAuxThread:
     """
-    tr2_ringAux @ 0xB6C4 : secondary ring thread handling coupling/aux tasks.
+    tr2_ringAux @ 0xB6C4 — secondary ring thread handling coupling/aux tasks.
     """
 
     def __init__(self, ring: RingState, ssc: Ssc,

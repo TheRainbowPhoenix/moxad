@@ -1,13 +1,13 @@
 """
-compat.py  :  Cross-platform shim for tr2d
+compat.py  —  Cross-platform shim for tr2d
 
 All platform-specific divergence lives here.  The rest of the codebase
 imports from this module; nothing else does sys.platform checks.
 
 Supported platforms
 -------------------
-  Linux   : AF_UNIX sockets, AF_PACKET raw sockets, fcntl/ioctl, /tmp paths
-  Windows : TCP loopback IPC, no raw sockets (sim-only), tempfile paths
+  Linux   — AF_UNIX sockets, AF_PACKET raw sockets, fcntl/ioctl, /tmp paths
+  Windows — TCP loopback IPC, no raw sockets (sim-only), tempfile paths
 
 IPC transport choice
 --------------------
@@ -16,7 +16,7 @@ IPC transport choice
 
   The port is derived deterministically from the socket "name" so that
   tr2ctrl / TR2Client can still connect by name without any coordination.
-  name -> port = 40000 + (hash(name) % 20000)
+  name → port = 40000 + (hash(name) % 20000)
 
 Wakeup channel (replaces socketpair)
 --------------------------------------
@@ -37,9 +37,9 @@ from typing import Tuple, Optional
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX   = sys.platform.startswith("linux")
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Path helpers
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _tmpdir() -> pathlib.Path:
     return pathlib.Path(tempfile.gettempdir())
@@ -47,7 +47,7 @@ def _tmpdir() -> pathlib.Path:
 def default_socket_path() -> str:
     """Platform-appropriate default IPC address for the main daemon socket."""
     if IS_WINDOWS:
-        return "tr2socket"          # used as a name -> converted to port
+        return "tr2socket"          # used as a name → converted to port
     return str(_tmpdir() / "tr2socket")
 
 def default_lhc_socket_path() -> str:
@@ -65,9 +65,9 @@ def default_status_path() -> str:
         return str(_tmpdir() / "tr2status")
     return "/var/db/tr2status"
 
-# 
-# IPC transport : unified AF_UNIX / TCP-loopback interface
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# IPC transport — unified AF_UNIX / TCP-loopback interface
+# ─────────────────────────────────────────────────────────────────────────────
 
 IPC_TCP_BASE_PORT = 40000
 IPC_TCP_PORT_RANGE = 20000
@@ -80,8 +80,8 @@ def _name_to_port(name: str) -> int:
 def ipc_address(name: str) -> object:
     """
     Return the address object to pass to bind()/connect().
-      Linux  -> str (path)
-      Windows -> (host, port) tuple
+      Linux  → str (path)
+      Windows → (host, port) tuple
     """
     if IS_WINDOWS:
         return ("127.0.0.1", _name_to_port(name))
@@ -124,13 +124,13 @@ def ipc_cleanup(name: str):
         except FileNotFoundError:
             pass
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Wakeup channel  (replaces AF_UNIX socketpair)
 #
-# Returns (reader_sock, writer_sock) : both are socket.socket objects.
+# Returns (reader_sock, writer_sock) — both are socket.socket objects.
 # Data written to writer_sock is readable from reader_sock.
 # Works on Windows and Linux without fcntl.
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def make_wakeup_pair() -> Tuple[socket.socket, socket.socket]:
     """
@@ -157,10 +157,10 @@ def make_wakeup_pair() -> Tuple[socket.socket, socket.socket]:
     r.setblocking(False)
     return r, w
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # Socket send/recv helpers
 # (replaces os.write(fd, ...) / os.read(fd, ...) on raw fds)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def sock_send(sock: socket.socket, data: bytes) -> int:
     """Send all bytes; return bytes sent or -1 on error."""
@@ -215,9 +215,9 @@ def fd_read(fd_or_sock, n: int) -> bytes:
     except OSError:
         return b""
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # select / wait helpers
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 def wait_readable(socks, timeout_s: float) -> bool:
     """
@@ -237,9 +237,9 @@ def wait_readable(socks, timeout_s: float) -> bool:
     except (OSError, ValueError):
         return False
 
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 # signal helpers
-# 
+# ─────────────────────────────────────────────────────────────────────────────
 
 import signal as _signal
 
@@ -261,9 +261,9 @@ SIGHUP  = getattr(_signal, "SIGHUP",  None)
 SIGINT  = _signal.SIGINT
 SIGTERM = _signal.SIGTERM
 
-# 
-# Raw packet socket (Linux only : returns None on Windows)
-# 
+# ─────────────────────────────────────────────────────────────────────────────
+# Raw packet socket (Linux only — returns None on Windows)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def open_raw_socket(iface: str) -> Optional[socket.socket]:
     """

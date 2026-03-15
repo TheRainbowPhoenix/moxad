@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TurboRing2 Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 h-screen flex flex-col overflow-hidden text-gray-200">
+
+    <!-- Top Navigation Controls -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex gap-4 items-center shadow-lg z-10 shrink-0">
+        <h1 class="text-xl font-bold text-white flex-1 flex items-center gap-2 tracking-tight">
+            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            TurboRing Simulator
+        </h1>
+        <button onclick="initRing(3)" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg font-medium shadow-md transition transform active:scale-95">3-Node Ring</button>
+        <button onclick="initRing(5)" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg font-medium shadow-md transition transform active:scale-95">5-Node Ring</button>
+        <button onclick="stopAll()" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-lg font-medium shadow-md transition transform active:scale-95">Stop All</button>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden">
+        
+        <!-- Graph Area -->
+        <div class="flex-1 relative bg-gray-900 min-h-0">
+            <svg id="network" class="w-full h-full absolute inset-0"></svg>
+            <div class="absolute top-4 left-4 text-xs text-gray-400 font-mono select-none">
+                <span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-1 align-middle"></span> Forwarding <br>
+                <span class="inline-block w-3 h-3 rounded-full bg-amber-500 mr-1 align-middle mt-1"></span> Blocked <br>
+                <span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-1 align-middle mt-1"></span> Down / Disabled
+            </div>
+            <div class="absolute bottom-4 right-4 bg-gray-800 border border-gray-700 rounded-lg p-2 text-xs text-gray-300 shadow-xl opacity-80 select-none pointer-events-none">
+                Hint: Click a physical link to snap it dynamically!
+            </div>
+        </div>
+
+        <!-- Real-time Console Log -->
+        <div class="h-[35%] bg-gray-950 border-t border-gray-800 flex flex-col shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+            <div class="px-4 py-2 border-b border-gray-800 flex justify-between items-center bg-gray-900 shadow-sm shrink-0">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Live Packet Tracer
+                </h2>
+                <button onclick="clearLogs()" class="text-xs text-gray-400 hover:text-white transition">Clear Stream</button>
+            </div>
+            <div id="logs" class="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-1">
+                <!-- Logs are streamed here -->
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let nodes = [];
+        let links = [];
+
+        // Setup SSE for real-time traffic view
+        const evtSource = new EventSource('/api/logs');
+        evtSource.onmessage = function(e) {
+            appendLog(JSON.parse(e.data));
+        };
+
+        // Poll actual IPC state from Daemons
+        async function fetchState() {
+            try {
+                const res = await fetch('/api/state');
+                const data = await res.json();
+                nodes = data.nodes;
+                links = data.links;
+                renderNetwork();
+            } catch (err) {
+                console.error("IPC Sync failed", err);
+            }
+        }
+        setInterval(fetchState, 500);
+        window.addEventListener('resize', renderNetwork);
+
+        // Core API Controls
+        async function initRing(n) {
+            await fetch('/api/init', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nodes: n})
+            });
+            clearLogs();
+            fetchState();
+        }
+
+        async function stopAll() {
+            await fetch('/api/init', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nodes: 0})
+            });
+            fetchState();
+        }
+
+        async function toggleLink(id) {
+            await fetch('/api/link/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: id})
+            });
+            fetchState();
+        }
+
+        // SVG Visualizer Logic
+        function renderNetwork() {
+            const svg = document.getElementById('network');
+            svg.innerHTML = '';
+            
+            const cx = svg.clientWidth / 2;
+            const cy = svg.clientHeight / 2;
+            const r = Math.min(cx, cy) - 90;
+            
+            // Auto-calculate circle layouts
+            nodes.forEach((n, i) => {
+                const angle = (i * 2 * Math.PI) / nodes.length - Math.PI / 2;
+                n.x = cx + r * Math.cos(angle);
+                n.y = cy + r * Math.sin(angle);
+            });
+
+            // Draw Wire Links
+            links.forEach(l => {
+                const n1 = nodes.find(x => x.id === l.n1);
+                const n2 = nodes.find(x => x.id === l.n2);
+                if(!n1 || !n2) return;
+
+                // Visual aesthetic line
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', n1.x); line.setAttribute('y1', n1.y);
+                line.setAttribute('x2', n2.x); line.setAttribute('y2', n2.y);
+                line.setAttribute('stroke', l.broken ? '#ef4444' : '#10b981');
+                line.setAttribute('stroke-width', l.broken ? '2' : '4');
+                line.setAttribute('class', 'transition-all duration-300');
+                if (l.broken) line.setAttribute('stroke-dasharray', '8,8');
+                svg.appendChild(line);
+
+                // Thick hidden clickable line to make triggering easy
+                const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                hit.setAttribute('x1', n1.x); hit.setAttribute('y1', n1.y);
+                hit.setAttribute('x2', n2.x); hit.setAttribute('y2', n2.y);
+                hit.setAttribute('stroke', 'transparent');
+                hit.setAttribute('stroke-width', '25');
+                hit.style.cursor = 'crosshair';
+                hit.onclick = () => toggleLink(l.id);
+                svg.appendChild(hit);
+            });
+
+            // Draw Node Boxes
+            nodes.forEach(n => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('transform', `translate(${n.x - 60}, ${n.y - 35})`);
+                
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('width', '120');
+                rect.setAttribute('height', '70');
+                rect.setAttribute('rx', '8');
+                rect.setAttribute('fill', '#1f2937'); // bg-gray-800
+                rect.setAttribute('stroke', n.ring?.is_master ? '#3b82f6' : '#374151');
+                rect.setAttribute('stroke-width', n.ring?.is_master ? '3' : '2');
+                rect.setAttribute('class', 'transition-colors duration-300');
+                g.appendChild(rect);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', '60');
+                text.setAttribute('y', '25');
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('class', 'text-sm font-bold');
+                text.textContent = `Node ${n.id}`;
+                g.appendChild(text);
+
+                const role = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                role.setAttribute('x', '60');
+                role.setAttribute('y', '42');
+                role.setAttribute('text-anchor', 'middle');
+                role.setAttribute('fill', n.ring?.is_master ? '#93c5fd' : '#9ca3af');
+                role.setAttribute('class', 'text-xs');
+                role.textContent = n.ring?.is_master ? 'Ring Master' : 'Slave';
+                g.appendChild(role);
+
+                const status = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                status.setAttribute('x', '60');
+                status.setAttribute('y', '58');
+                status.setAttribute('text-anchor', 'middle');
+                status.setAttribute('fill', n.ring?.status === 'Healthy' ? '#10b981' : '#ef4444');
+                status.setAttribute('class', 'text-[10px] font-bold uppercase tracking-wide');
+                status.textContent = n.ring?.status || 'INIT';
+                g.appendChild(status);
+
+                // Add LEDs for TurboRing Ports (Defaults to 9 & 10)
+                const p1 = n.ring?.ports?.find(p => p.id === 9);
+                const p2 = n.ring?.ports?.find(p => p.id === 10);
+
+                if (p1) {
+                    const p1c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    p1c.setAttribute('cx', '0'); p1c.setAttribute('cy', '35');
+                    p1c.setAttribute('r', '7');
+                    p1c.setAttribute('fill', getPortColor(p1.state));
+                    p1c.setAttribute('class', 'transition-colors duration-300');
+                    g.appendChild(p1c);
+                }
+                if (p2) {
+                    const p2c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    p2c.setAttribute('cx', '120'); p2c.setAttribute('cy', '35');
+                    p2c.setAttribute('r', '7');
+                    p2c.setAttribute('fill', getPortColor(p2.state));
+                    p2c.setAttribute('class', 'transition-colors duration-300');
+                    g.appendChild(p2c);
+                }
+                svg.appendChild(g);
+            });
+        }
+
+        function getPortColor(state) {
+            if (state === 'Forwarding') return '#10b981'; // emerald
+            if (state === 'Blocked') return '#f59e0b'; // amber
+            return '#ef4444'; // red (Disable/Down)
+        }
+
+        // Logger Interface
+        function appendLog(log) {
+            const logsDiv = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = "flex items-center gap-3 border-b border-gray-800 pb-1";
+            
+            const d = new Date(log.ts * 1000);
+            const time = d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+            
+            const dropStyle = log.drop ? 'line-through opacity-50' : '';
+            const dropBadge = log.drop ? '<span class="text-red-500 font-bold ml-2">[DROPPED]</span>' : '';
+            const typeColor = log.type === 'BPDU' ? 'text-indigo-400' : (log.type === 'POLLING' ? 'text-sky-300' : 'text-yellow-400');
+            
+            div.innerHTML = `
+                <span class="text-gray-500 w-24 shrink-0">[${time}]</span>
+                <span class="w-full flex items-center gap-2 ${dropStyle}">
+                    <span class="text-blue-400 font-bold shrink-0">Node ${log.src} <span class="text-gray-500 text-xs">P${log.sport}</span></span>
+                    <span class="text-gray-600">→</span>
+                    <span class="text-emerald-400 font-bold shrink-0">Node ${log.dst ?? '?'} <span class="text-gray-500 text-xs">P${log.dport ?? '?'}</span></span>
+                    <span class="font-bold ml-2 ${typeColor}">${log.type}</span>
+                    <span class="text-gray-600 text-xs ml-auto">len:${log.len}</span>
+                </span>
+                ${dropBadge}
+            `;
+            logsDiv.appendChild(div);
+            
+            // Auto-evict to keep DOM tight and performant 
+            while(logsDiv.children.length > 200) {
+                logsDiv.removeChild(logsDiv.firstChild);
+            }
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
