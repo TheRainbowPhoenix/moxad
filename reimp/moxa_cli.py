@@ -167,7 +167,14 @@ def data_encryp(password: str, buf_len: int = 32) -> str:
     return hex_str + md5_hex
 
 
-def data_deencryp(enc_str: str, buf_len: int = 32) -> str:
+def _buf_len_from_hash(enc_str: str) -> int:
+    """Infer DataEncryp plaintext buffer length from hash size."""
+    if len(enc_str) < 48 or (len(enc_str) - 32) % 2:
+        raise ValueError(f"DatadeEncryp: invalid length {len(enc_str)}")
+    return (len(enc_str) - 32) // 2
+
+
+def data_deencryp(enc_str: str, buf_len: int | None = None) -> str:
     """
     Faithful port of DatadeEncryp(char *a1, size_t a2, int a3):
 
@@ -177,6 +184,9 @@ def data_deencryp(enc_str: str, buf_len: int = 32) -> str:
       4. DES-ECB decrypt in 8-byte blocks
       5. Strip null padding → password
     """
+    if buf_len is None:
+        buf_len = _buf_len_from_hash(enc_str)
+
     expected = buf_len * 2 + 32
     if len(enc_str) != expected:
         raise ValueError(f"DatadeEncryp: length {len(enc_str)} != expected {expected}")
@@ -189,7 +199,11 @@ def data_deencryp(enc_str: str, buf_len: int = 32) -> str:
     dec = bytearray()
     for i in range(n_blocks):
         dec += _des_dec(enc_bytes[8*i : 8*i+8])
-    return bytes(dec[:buf_len]).rstrip(b"\x00").decode("latin-1")
+    # C implementation writes a terminating '\0' at position (a2-32)/2 and
+    # every C-string consumer stops at the first '\0'. Emulate that behavior
+    # (rstrip() is not equivalent if there are embedded NULs).
+    raw = bytes(dec[:buf_len])
+    return raw.split(b"\x00", 1)[0].decode("latin-1")
 
 
 # -----------------------------------------------------------------------------
