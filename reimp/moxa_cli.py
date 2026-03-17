@@ -138,19 +138,44 @@ _MOXA_KEY = b"MOXA2DES"
 _MOXA_SUBS = _des_keyschedule(_MOXA_KEY)
 
 _DES_encrypt1 = None
+_LIBCRYPTO = None
 
 def _load_des_encrypt1():
-    global _DES_encrypt1
+    global _DES_encrypt1, _LIBCRYPTO
     if _DES_encrypt1 is not None:
         return _DES_encrypt1
-    lib = ctypes.util.find_library("crypto")
-    if not lib:
-        raise RuntimeError("libcrypto not found (required for DataEncryp compatibility)")
-    fn = ctypes.CDLL(lib).DES_encrypt1
-    fn.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p, ctypes.c_int]
-    fn.restype = None
-    _DES_encrypt1 = fn
-    return _DES_encrypt1
+
+    candidates = []
+    found = ctypes.util.find_library("crypto")
+    if found:
+        candidates.append(found)
+    # Cross-platform fallback names (Linux/macOS/Windows OpenSSL builds)
+    candidates += [
+        "libcrypto.so.3", "libcrypto.so", "libcrypto.dylib", "crypto",
+        "libcrypto-3-x64.dll", "libcrypto-1_1-x64.dll", "libcrypto.dll", "libeay32.dll",
+    ]
+
+    seen = set()
+    last_err = None
+    for name in candidates:
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        try:
+            lib = ctypes.CDLL(name)
+            fn = lib.DES_encrypt1
+            fn.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p, ctypes.c_int]
+            fn.restype = None
+            _LIBCRYPTO = lib
+            _DES_encrypt1 = fn
+            return _DES_encrypt1
+        except Exception as e:
+            last_err = e
+
+    raise RuntimeError(
+        "Unable to load OpenSSL libcrypto/DES_encrypt1. "
+        "Install OpenSSL runtime (e.g. libcrypto-3-x64.dll on Windows)."
+    ) from last_err
 
 
 def _des_encrypt1_compat(block8: bytes, enc: int) -> bytes:
