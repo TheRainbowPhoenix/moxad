@@ -17,7 +17,7 @@ Usage:
   python3 moxa_cli.py --daemon          # start background SHM daemon
 """
 
-import sys, os, re, json, hashlib, struct, copy, time, socket
+import sys, os, re, json, hashlib, struct, copy, time, socket, ctypes, ctypes.util
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -137,6 +137,35 @@ def _des_block(block: bytes, subs: list, enc: bool) -> bytes:
 _MOXA_KEY = b"MOXA2DES"
 _MOXA_SUBS = _des_keyschedule(_MOXA_KEY)
 
+_DES_encrypt1 = None
+
+def _load_des_encrypt1():
+    global _DES_encrypt1
+    if _DES_encrypt1 is not None:
+        return _DES_encrypt1
+    lib = ctypes.util.find_library("crypto")
+    if not lib:
+        raise RuntimeError("libcrypto not found (required for DataEncryp compatibility)")
+    fn = ctypes.CDLL(lib).DES_encrypt1
+    fn.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p, ctypes.c_int]
+    fn.restype = None
+    _DES_encrypt1 = fn
+    return _DES_encrypt1
+
+
+def _des_encrypt1_compat(block8: bytes, enc: int) -> bytes:
+    """Match firmware DataEncryp: direct DES_encrypt1() over raw byte buffers."""
+    if len(block8) != 8:
+        raise ValueError("DES block size must be 8")
+    fn = _load_des_encrypt1()
+    data = (ctypes.c_ubyte * 8).from_buffer_copy(block8)
+    # Firmware behavior: zero 128-byte schedule and memcpy("MOXA2DES",8)
+    sched = (ctypes.c_ubyte * 128)()
+    for i, b in enumerate(_MOXA_KEY):
+        sched[i] = b
+    fn(ctypes.cast(data, ctypes.POINTER(ctypes.c_uint32)), ctypes.cast(sched, ctypes.c_void_p), int(enc))
+    return bytes(data)
+
 def _des_enc(block8: bytes) -> bytes:
     return _des_block(block8, _MOXA_SUBS, True)
 
@@ -149,8 +178,8 @@ def data_encryp(password: str, buf_len: int = 32) -> str:
     Faithful port of DataEncryp(char *a1, int a2) from libsysexport_so_1.c:
 
       1. Copy password into buf_len zero-padded buffer
-      2. DES-ECB encrypt with key "MOXA2DES" in 8-byte blocks
-         (n_blocks = ((buf_len-1)>>3)+1)
+      2. Encrypt each 8-byte block using OpenSSL DES_encrypt1() directly
+         with a raw 128-byte schedule buffer seeded by "MOXA2DES".
       3. Hex-encode encrypted bytes → hex_str
       4. MD5(hex_str) → 16 bytes → append as 32 hex chars
       Result length = buf_len*2 + 32
@@ -161,7 +190,7 @@ def data_encryp(password: str, buf_len: int = 32) -> str:
     n_blocks = ((buf_len - 1) >> 3) + 1
     enc = bytearray()
     for i in range(n_blocks):
-        enc += _des_enc(bytes(buf[8*i : 8*i+8]))
+        enc += _des_encrypt1_compat(bytes(buf[8*i : 8*i+8]), 1)
     hex_str = "".join(f"{b:02x}" for b in enc[:buf_len])
     md5_hex = hashlib.md5(hex_str.encode("ascii")).hexdigest()
     return hex_str + md5_hex
@@ -181,7 +210,7 @@ def data_deencryp(enc_str: str, buf_len: int | None = None) -> str:
       1. Split: hex_part = enc_str[:-32], md5_part = enc_str[-32:]
       2. Verify MD5(hex_part) == md5_part  (raises ValueError on fail)
       3. Hex-decode hex_part → enc_bytes
-      4. DES-ECB decrypt in 8-byte blocks
+      4. Decrypt in 8-byte blocks with the same DES_encrypt1() compatibility path
       5. Strip null padding → password
     """
     if buf_len is None:
@@ -198,7 +227,7 @@ def data_deencryp(enc_str: str, buf_len: int | None = None) -> str:
     n_blocks  = ((buf_len - 1) >> 3) + 1
     dec = bytearray()
     for i in range(n_blocks):
-        dec += _des_dec(enc_bytes[8*i : 8*i+8])
+        dec += _des_encrypt1_compat(enc_bytes[8*i : 8*i+8], 0)
     # C implementation writes a terminating '\0' at position (a2-32)/2 and
     # every C-string consumer stops at the first '\0'. Emulate that behavior
     # (rstrip() is not equivalent if there are embedded NULs).
