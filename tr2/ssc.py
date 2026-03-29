@@ -14,6 +14,10 @@ Here we use a SwitchBackend ABC so the same code runs against:
 import os
 import sys
 import socket
+
+# Added for simulator GUI
+GLOBAL_LINKS = []
+GLOBAL_DAEMONS = []
 import struct
 import logging
 from abc import ABC, abstractmethod
@@ -298,6 +302,7 @@ class SimSwitchBackend(SwitchBackend):
     """
 
     def __init__(self, port_count: int = 10):
+        self.instance_id = -1
         self.port_count  = port_count
         self._port_state = [PortState.FORWARDING] * port_count
         self._port_link  = [True]  * port_count
@@ -315,6 +320,11 @@ class SimSwitchBackend(SwitchBackend):
     def inject_frame(self, port: int, frame: bytes):
         """Test helper — inject a frame as if it arrived on port."""
         self._rx_queue[port].append(frame)
+        try:
+            _, w = self._port_socks[port]
+            w.send(b'\x01')
+        except Exception:
+            pass
 
     # ── port state ────────────────────────────────────────────────────────────
 
@@ -342,7 +352,26 @@ class SimSwitchBackend(SwitchBackend):
 
     def send_frame(self, tx_fd=None, raw_fd=None, port: int = 0,
                    frame: bytes = b"", vid: int = 0) -> int:
-        log.debug(f"[SIM] send_frame port={port} len={len(frame)}")
+        log.debug(f"[SIM] send_frame node={getattr(self, 'instance_id', -1)} port={port} len={len(frame)}")
+
+        # GUI Link Forwarding
+        if getattr(self, "instance_id", -1) != -1 and GLOBAL_LINKS and GLOBAL_DAEMONS:
+            for l in GLOBAL_LINKS:
+                if not l.get("active", True):
+                    continue
+                # Forward N1 -> N2
+                if l["n1"] == self.instance_id and l["p1"] == port:
+                    dst_node = l["n2"]
+                    dst_port = l["p2"]
+                    if 0 <= dst_node < len(GLOBAL_DAEMONS):
+                        GLOBAL_DAEMONS[dst_node].ssc.sw.inject_frame(dst_port, frame)
+                # Forward N2 -> N1
+                elif l["n2"] == self.instance_id and l["p2"] == port:
+                    dst_node = l["n1"]
+                    dst_port = l["p1"]
+                    if 0 <= dst_node < len(GLOBAL_DAEMONS):
+                        GLOBAL_DAEMONS[dst_node].ssc.sw.inject_frame(dst_port, frame)
+
         return len(frame)
 
     def recv_frame(self, fd=None) -> Tuple[Optional[bytes], int]:

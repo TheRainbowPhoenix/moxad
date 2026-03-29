@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Turbo Ring Simulator</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; background-color: #f0f0f0; }
+        #toolbar { padding: 10px; background: #ddd; border-bottom: 1px solid #ccc; display: flex; gap: 10px; align-items: center; }
+        button { padding: 5px 10px; cursor: pointer; }
+        #main { display: flex; flex: 1; overflow: hidden; }
+        #graph { flex: 2; position: relative; background: #fff; overflow: hidden; }
+        #sidebar { flex: 1; border-left: 1px solid #ccc; display: flex; flex-direction: column; background: #1e1e1e; }
+        #logs { flex: 1; overflow-y: auto; padding: 10px; color: #0f0; font-family: monospace; font-size: 12px; }
+
+        .node {
+            position: absolute; width: 60px; height: 60px; background: #444; color: white;
+            border-radius: 8px; text-align: center; line-height: 60px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10;
+        }
+        .node-label {
+            position: absolute; top: -25px; left: 0; width: 100%; text-align: center;
+            color: #333; font-weight: bold; font-size: 14px; line-height: normal; pointer-events: none;
+        }
+
+        .port-led {
+            width: 12px; height: 12px; border-radius: 50%; position: absolute;
+            border: 2px solid #fff; z-index: 11;
+        }
+        .port1 { left: -6px; top: 24px; }  /* Left side */
+        .port2 { right: -6px; top: 24px; } /* Right side */
+
+        .led-fwd { background: #00ff00; }
+        .led-blk { background: #ffa500; }
+        .led-down { background: #ff0000; }
+        .led-off { background: #555; }
+
+        .link-line { stroke: #666; stroke-width: 4; cursor: pointer; pointer-events: stroke; transition: stroke 0.2s; }
+        .link-line:hover { stroke: #999; }
+        .link-down { stroke: #ff0000; stroke-dasharray: 5,5; }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button onclick="spawnNode()">Spawn Node</button>
+        <button onclick="killAll()">Kill All</button>
+        <button onclick="autoLinkRing()">Auto Link Ring</button>
+        <span style="margin-left:auto; font-size: 14px; color: #555;">Click links to toggle them</span>
+    </div>
+    <div id="main">
+        <div id="graph">
+            <svg id="links-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;"></svg>
+            <div id="nodes-container"></div>
+        </div>
+        <div id="sidebar">
+            <h3 style="margin: 0; padding: 10px; background: #333; color: white; border-bottom: 1px solid #555;">Logs</h3>
+            <div id="logs"></div>
+        </div>
+    </div>
+
+    <script>
+        const evtSource = new EventSource("/logs_sse");
+        const logsDiv = document.getElementById("logs");
+        evtSource.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const entry = document.createElement("div");
+            entry.textContent = data.msg;
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        };
+
+        let nodes = [];
+        let links = [];
+        let autoRefresh = true;
+
+        async function fetchState() {
+            if(!autoRefresh) return;
+            try {
+                const res = await fetch("/state");
+                const data = await res.json();
+                nodes = data.nodes;
+                links = data.links;
+                render();
+            } catch (e) {
+                console.error("Failed to fetch state", e);
+            }
+        }
+
+        async function spawnNode() {
+            autoRefresh = false; // Pause rendering briefly
+            await fetch("/spawn", {method: "POST"});
+            autoRefresh = true;
+            fetchState();
+        }
+
+                async function killNode(instanceId) {
+            autoRefresh = false;
+            await fetch("/kill", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({id: instanceId})
+            });
+            autoRefresh = true;
+            fetchState();
+        }\n\n        async function killAll() {
+            autoRefresh = false;
+            await fetch("/kill_all", {method: "POST"});
+            autoRefresh = true;
+            fetchState();
+        }
+
+        async function modifyLink(action, n1, p1, n2, p2) {
+            autoRefresh = false;
+            await fetch("/link", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({action, n1, p1, n2, p2})
+            });
+            autoRefresh = true;
+            fetchState();
+        }
+
+        async function autoLinkRing() {
+            autoRefresh = false;
+
+            // Remove all existing links
+            for(const l of links) {
+                await fetch("/link", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({action: "remove", n1: l.n1, p1: l.p1, n2: l.n2, p2: l.p2})
+                });
+            }
+
+            // Create a ring connecting port 2 of node i to port 1 of node i+1
+            if(nodes.length < 2) { autoRefresh = true; return; }
+
+            for(let i=0; i<nodes.length; i++) {
+                const n1 = nodes[i].instance;
+                const n2 = nodes[(i+1) % nodes.length].instance;
+                // Since default port0=1 and port1=2
+                await fetch("/link", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({action: "add", n1: n1, p1: 2, n2: n2, p2: 1})
+                });
+            }
+
+            autoRefresh = true;
+            fetchState();
+        }
+
+        function getLedClass(stateStr, isDown) {
+            if (isDown) return "led-down";
+            if (stateStr === "Forwarding" || stateStr === 3) return "led-fwd";
+            if (stateStr === "Blocked" || stateStr === 2) return "led-blk";
+            return "led-off";
+        }
+
+        function render() {
+            const container = document.getElementById("nodes-container");
+            const svg = document.getElementById("links-svg");
+            const rect = container.parentElement.getBoundingClientRect();
+
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const radius = Math.min(cx, cy) - 100;
+
+            // Render nodes
+            let newHtml = "";
+            const nodePos = {};
+
+            nodes.forEach((node, i) => {
+                const angle = (i / nodes.length) * 2 * Math.PI - Math.PI/2; // Start top
+                const x = cx + radius * Math.cos(angle);
+                const y = cy + radius * Math.sin(angle);
+
+                nodePos[node.instance] = {x, y};
+
+                let p1State = "off", p2State = "off", p1Down = true, p2Down = true;
+
+                // Ring 1 is default
+                if(node.rings && node.rings.length > 0) {
+                    const r = node.rings[0]; // Active ring
+                    if(r.ports && r.ports.length >= 2) {
+                        p1State = r.ports[0].state; p1Down = r.ports[0].is_down;
+                        p2State = r.ports[1].state; p2Down = r.ports[1].is_down;
+                    }
+                }
+
+                newHtml += `
+                <div class="node" style="left: ${x-30}px; top: ${y-30}px;" onclick="killNode(${node.instance})" title="Click to kill node">
+                    <div class="node-label">Node ${node.instance}</div>
+                    SW
+                    <div class="port-led port1 ${getLedClass(p1State, p1Down)}" title="Port 1: ${p1State}"></div>
+                    <div class="port-led port2 ${getLedClass(p2State, p2Down)}" title="Port 2: ${p2State}"></div>
+                </div>`;
+            });
+
+            container.innerHTML = newHtml;
+
+            // Render links
+            svg.innerHTML = "";
+            links.forEach(l => {
+                const pos1 = nodePos[l.n1];
+                const pos2 = nodePos[l.n2];
+                if(pos1 && pos2) {
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+
+                    line.setAttribute("x1", pos1.x);
+                    line.setAttribute("y1", pos1.y);
+                    line.setAttribute("x2", pos2.x);
+                    line.setAttribute("y2", pos2.y);
+
+                    const classes = ["link-line"];
+                    if(!l.active) classes.push("link-down");
+                    line.setAttribute("class", classes.join(" "));
+
+                    // Allow clicking to toggle
+                    line.style.pointerEvents = "auto";
+                    line.onclick = () => { modifyLink("toggle", l.n1, l.p1, l.n2, l.p2); };
+
+                    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+                    title.textContent = `Link: Node ${l.n1} (Port ${l.p1}) <-> Node ${l.n2} (Port ${l.p2}) [${l.active?'UP':'DOWN'}]`;
+                    line.appendChild(title);
+
+                    svg.appendChild(line);
+                }
+            });
+        }
+
+        setInterval(fetchState, 1000);
+        fetchState();
+    </script>
+</body>
+</html>
